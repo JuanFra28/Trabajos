@@ -1,0 +1,1910 @@
+@model SGR.ModelContainers.SchedulerContainer
+@{
+    ViewBag.Title = "Nueva Cita";
+    ViewBag.pTitle = "Nueva Cita";
+    ViewBag.pageTitle = "Agendamiento";
+    Layout = "~/Views/_Shared/_Layout.cshtml";
+}
+
+<link href="~/assets/libs/select2/css/select2.min.css" rel="stylesheet" type="text/css" />
+<link href="~/assets/libs/spectrum-colorpicker2/spectrum.min.css" rel="stylesheet" type="text/css">
+<link href="~/assets/libs/bootstrap-touchspin/jquery.bootstrap-touchspin.min.css" rel="stylesheet" type="text/css" />
+
+<!-- quill css -->
+<link href="~/assets/libs/quill/quill.core.css" rel="stylesheet" type="text/css" />
+<link href="~/assets/libs/quill/quill.snow.css" rel="stylesheet" type="text/css" />
+<link href="~/assets/libs/@("@chenfengyuan")/datepicker/datepicker.min.css" rel="stylesheet" />
+
+<!-- flatpickr css -->
+<link href="~/assets/libs/flatpickr/flatpickr.min.css" rel="stylesheet">
+
+<!-- File Upload Plugins css -->
+<link href="~/assets/libs/dropzone/min/dropzone.min.css" rel="stylesheet" type="text/css" />
+
+<!-- Bootstrap Css -->
+<link href="~/assets/css/bootstrap.min.css" id="bootstrap-style" rel="stylesheet" type="text/css" />
+<!-- Icons Css -->
+<link href="~/assets/css/icons.min.css" rel="stylesheet" type="text/css" />
+<!-- App Css-->
+<link href="~/assets/css/app.min.css" id="app-style" rel="stylesheet" type="text/css" />
+<!-- Dark Mode Css-->
+<link href="~/assets/css/dark-layout.min.css" id="app-style" rel="stylesheet" type="text/css" />
+
+<link href="~/assets/libs/@("@fullcalendar")/core/main.min.css" rel="stylesheet" type="text/css" />
+<link href="~/assets/libs/@("@fullcalendar")/daygrid/main.min.css" rel="stylesheet" type="text/css" />
+<link href="~/assets/libs/@("@fullcalendar")/bootstrap/main.min.css" rel="stylesheet" type="text/css" />
+<link href="~/assets/libs/@("@fullcalendar")/timegrid/main.min.css" rel="stylesheet" type="text/css" />
+
+<!-- DataTables -->
+<link href="~/assets/libs/datatables.net-bs4/css/dataTables.bootstrap4.min.css" rel="stylesheet" type="text/css" />
+<link href="~/assets/libs/datatables.net-buttons-bs4/css/buttons.bootstrap4.min.css" rel="stylesheet" type="text/css" />
+
+<!-- Select datatable -->
+<link href="~/assets/libs/datatables.net-select-bs4/css/select.bootstrap4.min.css" rel="stylesheet" type="text/css" />
+
+<!-- Responsive datatable -->
+<link href="~/assets/libs/datatables.net-responsive-bs4/css/responsive.bootstrap4.min.css" rel="stylesheet" type="text/css" />
+
+@Html.Partial("~/Views/Scheduler/Partial/SchedulerDialog.cshtml")
+@Html.Partial("~/Views/Scheduler/Partial/AddSchedulerEvent.cshtml")
+@Html.Partial("~/Views/Scheduler/Partial/DeleteSchedulerEvent.cshtml")
+@Html.Partial("~/Views/Scheduler/Partial/PatientAdvancedSearch.cshtml")
+@*@Html.Partial("~/Views/Supply/Partial/AddSuppliesDialog.cshtml")
+    @Html.Partial("~/Views/ICD/Partial/AddICDDialog.cshtml")*@
+@Html.Partial("~/Views/Scheduler/Partial/PhysicianSearch.cshtml")
+@Html.Partial("~/Views/Scheduler/Partial/NewPhysician.cshtml")
+@Html.Partial("~/Views/Scheduler/Partial/OverBookingSchedulerDialog.cshtml")
+@Html.Partial("~/Views/Scheduler/Partial/FastNewPatientDialog.cshtml")
+@Html.Partial("~/Views/Scheduler/Partial/PriceDialog.cshtml")
+
+@using (Html.BeginForm("Create", "Scheduler", FormMethod.Post, new { id = "SchedulerForm", autocomplete = "off" }))
+{
+    @Html.AntiForgeryToken()
+    @Html.ValidationSummary(true, "", new { @class = "text-danger" })
+    <input type="hidden" id="Center_Id" value="@ViewBag.CenterId" />
+    <input type="hidden" id="CenterNameAbbr" value="@ViewBag.CenterName" />
+    @Html.HiddenFor(m => m.Patient.Id)
+    @Html.HiddenFor(m => m.PhysicianId)
+    @Html.HiddenFor(m => m.PatientUpdated)
+    @Html.HiddenFor(m => m.Studies)
+    @Html.HiddenFor(m => m.GroupImages)
+    <input type="hidden" id="selectedPatientDocumentId" value="" />
+    <!-- Start Form Wizard Basic row -->
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card">
+                <div class="card-body">
+                    <h4 class="card-title mb-4">Agendamiento</h4>
+                    <div id="basic-example">
+                        <!-- Seller Details -->
+                        <h3>Datos del Paciente</h3>
+                        <section>
+                            <div class="row">
+                                <div class="col-lg-1">
+                                    <div class="mt-2">
+                                        <label>Tipo Doc.</label>
+                                    </div>
+                                </div>
+                                <div class="col-lg-1">
+                                    <div class="mb-3">
+                                        <select id="patientDocumentTypeSearch" class="form-select">
+                                            <option value="0">DNI</option>
+                                            <option value="1">CE</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="mb-3">
+                                        <input type="text" class="form-control" id="Patient_DocumentId" placeholder="Numero de Documento">
+                                    </div>
+                                </div>
+                                <div class="col-lg-3">
+                                    <a href="#" id="btnSearchPatient" onclick="searchPatient()" class="btn btn-primary btn-md"><i class="fas fa-search"></i> </a>
+                                    <a href="#" class="btn btn-primary btn-md" onclick="advancedPatientSearch()"><i class="fas fa-search-plus"></i> Busqueda Avanzada</a>
+                                </div>
+                                <div class="col-lg-2" style="float:right">
+                                    <a href="#" class="btn btn-outline-primary btn-md" onclick="newPatient(event);" title="Nuevo Paciente"><i class="fas fa-plus"></i> Nuevo Paciente</a>
+                                </div>
+                                <div class="col-lg-2 mt-2" id="editPatientDiv" style="display:none;float:right">
+                                    <div class="form-check mb-2">
+                                        <input id="editPatientCheckBox" class="form-check-input" type="checkbox">
+                                        <label class="form-check-label" for="editPatientCheckBox">Editar Paciente</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row" id="patientNotFound" style="display:none">
+                                <div class="alert alert-warning" role="alert" id="messagePatientNotFound"></div>
+                            </div>
+
+                            <div id="patientInformation" style="display:none">
+                                <div class="row">
+                                    <div class="col-lg-2">
+                                        <div class="mb-3">
+                                            <label>Tipo de Documento</label>
+                                            @Html.EnumDropDownListFor(model => model.Patient.DocumentType, new { @class = "form-select" })
+                                        </div>
+                                    </div>
+                                    <div class="col-lg-3">
+                                        <div class="mb-3">
+                                            <label for="patientDocument">Documento:</label>
+                                            <input type="text" class="form-control" id="Patient_DocumentId_2">
+                                        </div>
+                                    </div>
+                                    <div class="col-lg-1">
+                                        <div class="mb-3">
+                                        </div>
+                                    </div>
+                                    <div class="col-lg-3">
+                                        <div class="mb-3">
+                                            <label for="patientMRN">Historia Clinica:</label>
+                                            @Html.EditorFor(model => model.Patient.MRN, new { htmlAttributes = new { @class = "form-control", @style = "text-transform:uppercase" } })
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-lg-6">
+                                        <div class="mb-3">
+                                            <label for="patientFirstName">Nombres</label>
+                                            @Html.EditorFor(model => model.Patient.FirstName, new { htmlAttributes = new { @class = "form-control required", @style = "text-transform:uppercase" } })
+                                        </div>
+                                    </div>
+                                    <div class="col-lg-6">
+                                        <div class="mb-3">
+                                            <label for="patientLastName">Apellidos</label>
+                                            @Html.EditorFor(model => model.Patient.LastName, new { htmlAttributes = new { @class = "form-control required", @style = "text-transform:uppercase" } })
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-lg-3">
+                                        <div class="mb-3">
+                                            <label for="patientDOB">Fecha de Nacimiento</label>
+                                            @Html.EditorFor(model => model.Patient.DateOfBirth, new { htmlAttributes = new { @class = "form-control required", @style = "text-transform:uppercase" } })
+                                        </div>
+                                    </div>
+                                    <div class="col-lg-3">
+                                        <div class="mb-3">
+                                            <label for="patientAge">Edad</label>
+                                            @Html.EditorFor(model => model.Patient.AgeAsString, new { htmlAttributes = new { @class = "form-control", @style = "text-transform:uppercase" } })
+                                        </div>
+                                    </div>
+                                    <div class="col-lg-3">
+                                        <div class="mb-3">
+                                            <label>Genero</label>
+                                            @Html.EnumDropDownListFor(model => model.Patient.Gender, new { @class = "form-select" })
+                                        </div>
+                                    </div>
+                                    <div class="col-lg-3">
+                                        <div class="mb-3">
+                                            <label>Estado Marital</label>
+                                            @Html.EnumDropDownListFor(model => model.Patient.MaritalStatus, new { @class = "form-select" })
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-lg-12">
+                                        <div class="mb-3">
+                                            <label for="patientAddress">Direccion</label>
+                                            @Html.EditorFor(model => model.Patient.FullAddress, new { htmlAttributes = new { @class = "form-control", @style = "text-transform:uppercase" } })
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-lg-6">
+                                        <div class="mb-3">
+                                            <label for="patientPhone">Telefono</label>
+                                            @Html.EditorFor(model => model.Patient.MobilePhone, new { htmlAttributes = new { @class = "form-control", @style = "text-transform:uppercase" } })
+                                        </div>
+                                    </div>
+                                    <div class="col-lg-6">
+                                        <div class="mb-3">
+                                            <label for="patientEmail">Correo</label>
+                                            @Html.EditorFor(model => model.Patient.Email, new { htmlAttributes = new { @class = "form-control" } })
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <!-- Company Document -->
+                        <h3>Med. Solicitante/Seguros</h3>
+                        <section>
+                            <div class="row">
+                                <div class="col-lg-6">
+                                    <div class="mb-3">
+                                        <label>Medico Solicitante:</label>
+                                        <input type="text" class="form-control" id="physicianName" style="text-transform:uppercase" placeholder="No Seleccionado" readonly>
+                                    </div>
+                                </div>
+                                <div class="col-lg-3">
+                                    <div class="mt-4">
+                                        <a href="javascript:void();" onclick="showPhysicianSearch(event)" class="btn btn-primary"> <i class="fas fa-search"></i> Buscar</a>
+                                        <a href="javascript:void();" onclick="newPhysician(event)" class="btn btn-outline-primary"> <i class="fas fa-plus-circle"></i> Nuevo</a>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-lg-6">
+                                    <div class="mb-3">
+                                        <label for="basicpill-cardno-input" class="required-field"><b>Departamento Solicitante:</b></label>
+                                        @Html.DropDownListFor(model => model.FacilityDepartmentId, (SelectList)ViewBag.FacilityDepartments, "Seleccione", htmlAttributes: new { @class = "form-select" })
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-lg-6">
+                                    <div class="mb-3">
+                                        <label for="basicpill-cardno-input" class="required-field"><b>Compañias:</b></label>
+                                        @Html.DropDownListFor(model => model.InsuranceId, (ViewBag.Insurances != null ? (SelectList)ViewBag.Insurances : new SelectList(string.Empty, "Id", "Name")), "Seleccionar", htmlAttributes: new { @class = "form-select" })
+                                    </div>
+                                </div>
+                                @*<div class="col-lg-6">
+                                        <div class="mb-3">
+                                            --para multiple insurance
+                                            <div class="list-group">
+                                                <a href="#" class="list-group-item list-group-item-action active">
+                                                    Cras justo odio
+                                                </a>
+                                                <a href="#" class="list-group-item list-group-item-action">Dapibus ac facilisis in</a>
+                                                <a href="#" class="list-group-item list-group-item-action">Morbi leo risus</a>
+                                                <a href="#" class="list-group-item list-group-item-action">Porta ac consectetur ac</a>
+                                                <a href="#" class="list-group-item list-group-item-action disabled">Vestibulum at eros</a>
+                                            </div>
+                                        </div>
+                                    </div>*@
+
+                            </div>
+                            <div class="row">
+                                <div class="col-lg-6">
+                                    <div class="mb-3">
+                                        <label>Forma de Pago:</label>
+                                        @Html.EnumDropDownListFor(model => model.PaymentType, "Seleccione", new { @class = "form-select" })
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-lg-6">
+                                <div class="mb-3">
+                                    <label for="basicpill-namecard-input">Observaciones</label>
+                                    <textarea class="form-control"></textarea>
+                                </div>
+                            </div>
+                        </section>
+
+                        <!-- Bank Details -->
+                        <h3>Orden/Estudios</h3>
+                        <section>
+                            <div>
+                                <div class="row">
+                                    <div class="col-lg-3">
+                                        <div class="mb-3">
+                                            <label><b>Tipo de Paciente:</b></label>
+                                            @Html.EnumDropDownListFor(model => model.PatientType, "Seleccione", new { @class = "form-select" })
+                                        </div>
+                                    </div>
+                                    <div class="col-lg-3">
+                                        <div class="mb-3">
+                                            <label for="basicpill-namecard-input">Num. Orden(Opcional)</label>
+                                            <input type="text" class="form-control" id="OrderNumber">
+                                        </div>
+                                    </div>
+                                    @*<div class="col-lg-3">
+                                            <div class="mb-3">
+                                                <label for="basicpill-namecard-input">Documento de Referencia</label>
+                                                <input type="text" class="form-control" id="DocReferencia">
+                                            </div>
+                                        </div>*@
+                                </div>
+                                <div class="row">
+                                    <div class="col-lg-6">
+                                        <div class="mb-3">
+                                            <label for="basicpill-cardno-input">Estudios</label>
+
+
+                                            @Html.DropDownListFor(model => model.Study.Id, (SelectList)ViewBag.Studies, "Seleccione", htmlAttributes: new { @class = "form-select" })
+                                        </div>
+                                    </div>
+                                    <div class="col-lg-2">
+                                        <div class="mb-3">
+                                            <label for="basicpill-cardno-input">Lateralidad</label>
+                                            @Html.EnumDropDownListFor(model => model.Laterality, "Seleccione", htmlAttributes: new { @class = "form-select" })
+                                        </div>
+                                    </div>
+                                    <div class="col-lg-2">
+                                        <div class="mt-4">
+                                            <a href="javascript:void();" id="AddStudy" class="btn btn-primary"> <i class="fas fa-plus-circle"></i> Añadir</a>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-8">
+                                        <div class="mb-3">
+                                            <div id="studyAlert" style="display:none">
+                                                <br />
+                                                <div class="alert alert-warning" role="alert">Por favor seleccione un estudio</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-lg-12">
+                                        <div class="mb-3">
+                                            <table class="table" id="study_table" style="display:none">
+                                                <thead>
+                                                    <tr>
+                                                        <th scope="col">Centro</th>
+                                                        <th scope="col">Sala[Recurso]</th>
+                                                        <th scope="col">Estudio/Lateralidad</th>
+                                                        <th scope="col">Duracion</th>
+                                                        <th scope="col">Fecha</th>
+                                                        <th scope="col">Cantidad</th>
+                                                        <th scope="col">Coaseguro</th>
+                                                        <th scope="col">Subtotal</th>
+                                                        <th scope="col">Acciones</th>
+                                                        <th scope="col" hidden>LocationId</th>
+                                                        @*11*@
+                                                        <th scope="col" hidden>ResourceId</th>
+                                                        <th scope="col" hidden>StudyId</th>
+                                                        <th scope="col" hidden>ScheduledDate</th>
+                                                        <th scope="col" hidden>PriceValue</th>
+                                                        <th scope="col" hidden>PriceOption</th>
+
+                                                        @*19*@
+                                                        <th scope="col" hidden>PriceRaw</th>
+                                                        <th scope="col" hidden>ScheduledDateId</th>
+                                                        <th scope="col" hidden>StudyLaterality</th>
+                                                        <th scope="col" hidden>StudyQuantity</th>
+                                                        <th scope="col" hidden>Subtotal</th>
+                                                        <th scope="col" hidden>TotalPrice</th>
+                                                        <th scope="col" hidden>Complementarystudy</th>
+                                                        <th scope="col" hidden>RequireLaterality</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody></tbody>
+                                                <tfoot class="row justify-content-lg-end" style="font-weight:bold"> </tfoot>
+                                            </table>
+
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <!-- Confirm Details -->
+                        <h3>Confirmacion</h3>
+                        <section>
+                            <div class="row justify-content-center">
+                                <div class="col-lg-6">
+                                    <div class="justify-content-center">
+                                        <div class="mb-4">
+                                            <div class="text-center">
+                                                <i class="mdi mdi-check-circle-outline text-success display-4"></i>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <div class="text-center">
+                                                <h5>Confirmar Cita</h5>
+                                            </div>
+                                            <div class="">
+                                                <dl class="row mb-0 mx-5" id="confirmExam"></dl>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+
+                </div>
+                <!-- end card body -->
+            </div>
+            <!-- end card -->
+        </div>
+        <!-- end col -->
+    </div>
+    <!-- end row -->
+    <!-- Start Form Wizard vertical row-->
+}
+
+<!-- JAVASCRIPT -->
+<script src="~/assets/libs/jquery/jquery.min.js"></script>
+<script src="~/assets/libs/bootstrap/js/bootstrap.bundle.min.js"></script>
+<script src="~/assets/libs/metismenu/metisMenu.min.js"></script>
+<script src="~/assets/libs/simplebar/simplebar.min.js"></script>
+<script src="~/assets/libs/node-waves/waves.min.js"></script>
+
+<script src="~/assets/libs/select2/js/select2.min.js"></script>
+<script src="~/assets/libs/spectrum-colorpicker2/spectrum.min.js"></script>
+<script src="~/assets/libs/bootstrap-touchspin/jquery.bootstrap-touchspin.min.js"></script>
+
+<!--Quill js-->
+<script src="~/assets/libs/quill/quill.min.js"></script>
+
+<!--Flatpickr js-->
+<script src="~/assets/libs/flatpickr/flatpickr.min.js"></script>
+
+<!-- Plugins js -->
+<script src="~/assets/libs/dropzone/min/dropzone.min.js"></script>
+
+<!-- jquery step -->
+<script src="~/assets/libs/jquery-steps/build/jquery.steps.min.js"></script>
+
+<!-- init js -->
+<script src="~/assets/js/pages/form-editor.init.js"></script>
+
+<!-- form advanced init -->
+<script src="~/assets/js/pages/form-advanced.init.js"></script>
+
+<script src="~/assets/libs/@("@fullcalendar")/core/main.min.js"></script>
+<script src="~/assets/libs/@("@fullcalendar")/bootstrap/main.min.js"></script>
+<script src="~/assets/libs/@("@fullcalendar")/daygrid/main.min.js"></script>
+<script src="~/assets/libs/@("@fullcalendar")/timegrid/main.min.js"></script>
+<script src="~/assets/libs/@("@fullcalendar")/interaction/main.min.js"></script>
+
+<!-- Required datatable js -->
+<script src="~/assets/libs/datatables.net/js/jquery.dataTables.min.js"></script>
+<script src="~/assets/libs/datatables.net-bs4/js/dataTables.bootstrap4.min.js"></script>
+
+<!-- Responsive examples -->
+<script src="~/assets/libs/datatables.net-responsive/js/dataTables.responsive.min.js"></script>
+<script src="~/assets/libs/datatables.net-responsive-bs4/js/responsive.bootstrap4.min.js"></script>
+
+<!-- Datatable init js -->
+<script src="~/assets/js/pages/datatables.init.js"></script>
+
+<!-- form wizard init -->
+@*<script src="~/assets/js/pages/form-wizard.init.js"></script>*@
+
+<script src="~/assets/js/app.js"></script>
+<script src="~/assets/js/sgr.common.js"></script>
+<script type="text/javascript">
+    var calendar;
+    var totalPrice = 0;
+    var study = {};
+    var rowId;
+    $(document).ready(function () {
+        setTimeout(function () {
+            $("#schedulerSubmenu").collapse("show");
+            $("#newSchedulerLink").css("background-color", "#fff");
+            $("#newSchedulerLink").css("color", "#2184be");
+        }, 100);
+
+        $(".search-advanced-patient-field").keyup(function (event) {
+            event.preventDefault();
+            if (event.keyCode === 13) {
+                document.getElementById("searchAdvancedPatient").click();
+            }
+        });
+
+
+
+        var input = document.getElementById("Patient_DocumentId");
+        input.addEventListener("keyup", function (event) {
+            event.preventDefault();
+            if (event.keyCode === 13) {
+                event.preventDefault();
+                searchPatient();
+            }
+        });
+        disableControls();
+
+        $("#Study_Id").change(function () {
+            var studyId = $("#Study_Id option:selected").val();
+            var destinationDropdown = "#Laterality"
+            if (studyId > 0) {
+                $.ajax({
+                    type: 'POST',
+                    url: '/Study/GetRequirementLaterality',
+                    data: { studyId: studyId },
+                    success: function (response) {
+                        if (response.success) {
+                            var requireLaterality = response.requireLaterality;
+                            if (requireLaterality == 1) {
+                                $("#Laterality").prop('disabled', false);
+                            } else {
+                                $("#Laterality").prop('disabled', true);
+                                $("#Laterality").val('0').change();
+                            }
+                        } else {
+                            showErrorNotification(response.responseText);
+                        }
+                    },
+                    error: function (ex) {
+                        showErrorNotification(ex.responseText);
+                    }
+                });
+            }
+        });
+
+
+        $("#editPatientCheckBox").change(function () {
+            $("#Patient_FirstName").prop('readonly', !this.checked);
+            $("#Patient_LastName").prop('readonly', !this.checked);
+            $("#Patient_Gender").prop('disabled', !this.checked);
+            $("#Patient_MaritalStatus").prop('disabled', !this.checked);
+            $("#Patient_DateOfBirth").prop('readonly', !this.checked);
+            $("#Patient_AgeAsString").prop('readonly', true);
+            $("#Patient_MRN").prop('readonly', !this.checked);
+            $("#Patient_Nationality").prop('readonly', !this.checked);
+            $("#Patient_FullAddress").prop('readonly', !this.checked);
+            $("#Patient_ZipCode").prop('readonly', !this.checked);
+            $("#Patient_CountryId").prop('disabled', !this.checked);
+            $("#Patient_DepartmentId").prop('disabled', !this.checked);
+            $("#Patient_ProvinceId").prop('disabled', !this.checked);
+            $("#Patient_DistrictId").prop('disabled', !this.checked);
+            $("#Patient_Phone").prop('readonly', !this.checked);
+            $("#Patient_MobilePhone").prop('readonly', !this.checked);
+            $("#Patient_Email").prop('readonly', !this.checked);
+            $("#PatientUpdated").val(true);
+        });
+
+
+        $("#Patient_CountryId").change(function () {
+            console.log("aca: " + $("#Patient_CountryId").val());
+        });
+
+        patientDocumentTypeSearch
+
+        $("#Center_Id").change(function () {
+            var centerId = $("#Center_Id").val();
+            getRoomInformation(centerId);
+            getResourceInformation(centerId);
+            getStudyInformation(centerId);
+        });
+
+        $('#AddStudy').tooltip({
+            trigger: 'click',
+            placement: 'right',
+            delay: { "sasshow": 100, "hide": 200 }
+        });
+
+        $('#study_table tbody').on('click', 'select[name="StudyType"]', function () {
+            console.log($(this).closest('tr'));
+            console.log($(this).closest('tr').val());
+        })
+
+
+        $("#AddStudy").click(function (e) {
+            e.preventDefault();
+            var studyId = $('#Study_Id').val();
+            var centerName = $("#CenterNameAbbr").val();
+
+            totalPrice = 0;
+
+            if (studyId > 0) {
+                $("#studyAlert").css('display', 'none');
+                blockUI();
+                $.ajax({
+                    type: 'POST',
+                    url: '/Scheduler/GetStudyCartRow',
+                    dataType: 'json',
+                    data: { studyId: studyId },
+                    success: function (result) {
+                        if (result.success) {
+                            var isFirstRow = false;
+                            $("#study_table").css('display', 'block');
+                            var rowsCount = $('#study_table tbody').children('tr').length;
+                            if (rowsCount === 0) {
+                                isFirstRow = true;
+                            }
+                            rowId = new Date().getUTCMilliseconds();
+                            study = JSON.parse(result.responseText);
+
+                            var laterality = $("#Laterality option:selected").text();
+                            var lateralityId = $("#Laterality option:selected").val();
+
+                            var quantityLaterality=1;
+                            if (lateralityId == 3) {
+                                quantityLaterality = 2;
+
+                            } else {
+                                quantityLaterality = 1;
+                            }
+                            var subtotal;
+                            subtotal = study.Price * quantityLaterality;
+
+
+
+                            var studyRow = AddStudyRow(rowId, isFirstRow);
+                            $("#study_table tbody").append(studyRow);
+
+                            document.getElementById(rowId).cells[0].innerHTML = centerName;
+                            document.getElementById(rowId).cells[1].innerHTML = "";
+                            document.getElementById(rowId).cells[2].innerHTML = study.Name + " - " + laterality;
+                            document.getElementById(rowId).cells[3].innerHTML = study.Duration;
+                            document.getElementById(rowId).cells[5].innerHTML = quantityLaterality;
+                            document.getElementById(rowId).cells[6].innerHTML = study.Price;
+                            document.getElementById(rowId).cells[7].innerHTML = "S/." + subtotal;
+                            document.getElementById(rowId).cells[11].innerHTML = study.Id;//StudyId
+                            document.getElementById(rowId).cells[13].innerHTML = study.Price;
+                            document.getElementById(rowId).cells[15].innerHTML = '{"Otro":'+ study.Price+'}';
+                            document.getElementById(rowId).cells[18].innerHTML = '{"Otro":' + quantityLaterality + '}';
+                            document.getElementById(rowId).cells[16].innerHTML = "";
+                            document.getElementById(rowId).cells[19].innerHTML = subtotal;
+                            document.getElementById(rowId).cells[17].innerHTML = lateralityId;
+                            document.getElementById(rowId).cells[21].innerHTML = study.RequireComplementaryStudy;
+                            document.getElementById(rowId).cells[22].innerHTML = study.RequireLaterality;
+
+
+                            tableCountrows = document.getElementById("study_table").rows.length;
+
+                            for (var i = 1; i < tableCountrows; i++) {
+                                totalPrice = totalPrice + parseFloat(document.getElementById("study_table").rows[i].cells[19].innerHTML);
+                            }
+
+                            $("#study_table tfoot").empty();
+                            $("#study_table tfoot").append("Total: S/." + parseFloat(totalPrice).toFixed(2));
+                            $(document).on('keydown', '#study_table td', function (event) {
+                                if (event.which == 13) { // Enter key
+                                    event.preventDefault(); // Prevent form submission
+                                    $(this).blur(); // Remove focus from the edited cell
+                                    var editedValue = $(this).text().trim();
+                                    console.log(editedValue);
+                                    if (!/^\d+(\.\d+)?$/.test(editedValue)) {
+                                        showErrorNotification('Solo se permiten números en esta celda');
+                                        $(this).text($(this).data('original-value'));
+                                        document.getElementById(rowId).cells[5].innerHTML = quantityLaterality;
+                                        document.getElementById(rowId).cells[6].innerHTML = study.Price;
+                                    }
+                                    else {
+                                        totalPrice = 0;
+                                        tableCountrows = document.getElementById("study_table").rows.length;
+                                        quantityLaterality = document.getElementById(rowId).cells[5].innerHTML;
+                                        study.Price = document.getElementById(rowId).cells[6].innerHTML;
+                                        subtotal = study.Price * quantityLaterality;
+                                        document.getElementById(rowId).cells[7].innerHTML = "S/." + subtotal;
+                                        document.getElementById(rowId).cells[19].innerHTML = subtotal;
+                                        document.getElementById(rowId).cells[15].innerHTML = '{"Otro":' + study.Price + '}';
+                                        tableCountrows = document.getElementById("study_table").rows.length;
+                                        for (var i = 1; i < tableCountrows; i++) {
+                                            totalPrice = totalPrice + parseFloat(document.getElementById("study_table").rows[i].cells[19].innerHTML);
+                                        }
+                                        $("#study_table tfoot").empty();
+                                        $("#study_table tfoot").append("Total: S/." + parseFloat(totalPrice).toFixed(2));
+                                    }
+                                }
+                            });
+
+                            $(document).on('blur', '#study_table td', function () {
+                                // Save the edited value
+                                var editedValue = $(this).text().trim();
+                                var originalValue = $(this).data('original-value');
+                                if (editedValue != originalValue) {
+                                    $(this).data('original-value', editedValue);
+                                    console.log("Value changed from " + originalValue + " to " + editedValue);
+                                    // Your code to save the edited value goes here
+                                }
+                            });
+
+                            if (!isFirstRow) {
+                                $("#sameImageDiv").css('display', 'block');
+                            } else {
+                                $("#sameImageDiv").css('display', 'none');
+                            }
+                        } else {
+                            unblockUI();
+                            showErrorNotification(result.responseText);
+                        }
+                    },
+                    error: function (ex) {
+                        unblockUI();
+                        showErrorNotification('GetStudyCartRow ' + ex.responseText);
+                    }
+                }).done(function () {
+                    unblockUI();
+                });
+            } else {
+                $("#studyAlert").css('display', 'block');
+            }
+        });
+        $("#study_table").on('click', 'tr', function (event) {
+            event.preventDefault();
+            var rowId = $(this).attr('id');
+            if ($(this).attr('edit_type') == 'button') {
+                return false;
+            } else {
+                totalPrice = 0;
+                tableCountrows = document.getElementById("study_table").rows.length;
+                quantityLaterality = document.getElementById(rowId).cells[5].innerHTML;
+                study.Price = document.getElementById(rowId).cells[6].innerHTML;
+                subtotal = study.Price * quantityLaterality;
+                document.getElementById(rowId).cells[7].innerHTML = "S/." + subtotal;
+                document.getElementById(rowId).cells[19].innerHTML = subtotal;
+                document.getElementById(rowId).cells[15].innerHTML = '{"Otro":' + study.Price + '}';
+                tableCountrows = document.getElementById("study_table").rows.length;
+                for (var i = 1; i < tableCountrows; i++) {
+                    totalPrice = totalPrice + parseFloat(document.getElementById("study_table").rows[i].cells[19].innerHTML);
+                }
+                $("#study_table tfoot").empty();
+                $("#study_table tfoot").append("Total: S/." + parseFloat(totalPrice).toFixed(2));
+
+            }
+            $(this).focus();
+
+        });
+        $("#studyLocationSelect").change(function () {
+            var locationId = $(this).val();
+            getResources(locationId, "Regular");
+        });
+
+        $("#studyResourceSelect").change(function () {
+            var resourceId = $(this).val();
+            if (resourceId > 0) {
+                displayCalendar(resourceId);
+            }
+        });
+
+        $("#studyLocationManualSchedule").change(function () {
+            var locationId = $(this).val();
+            getResources(locationId, "Manual");
+        });
+
+        $("#OriginCenterId").change(function () {
+            var originCenterId = $(this).val();
+            if (originCenterId == -1) {
+                $("#OtherOriginCenter").prop("disabled", false);
+                $("#OtherOriginCenter").val("");
+            } else {
+                $("#OtherOriginCenter").prop("disabled", true);
+                $("#OtherOriginCenter").val("");
+            }
+        });
+
+        //$("#priceOption").change(function () {
+        //    var priceValue = $(this).val();
+        //    $("#priceValue").val(priceValue);
+        //    var priceType = $("#priceOption option:selected").text();
+        //    if (priceType === 'Otro') {
+        //        $("#priceValue").prop("readonly", false);
+        //    } else {
+        //        $("#priceValue").prop("readonly", true);
+        //    }
+        //});
+
+        $('#schedulerDialog').on('shown.bs.modal', function (e) {
+            var rowId = $("#schedulerTableRowId").val();
+            var selectedResourceId = document.getElementById(rowId).cells[10].innerHTML;
+            if (selectedResourceId != "") {
+                $('#studyResourceSelect').val(selectedResourceId).trigger('change');
+            } else {
+                calendar.destroy();
+            }
+        });
+
+        $('#schedulerDialog').on('hidden.bs.modal', function (e) {
+            calendar.destroy();
+            $("#studyLocationSelect").empty();
+            $("#studyResourceSelect").empty();
+        });
+
+        $('#overBookingSchedulerModal').on('shown.bs.modal', function (e) {
+            var locationSelectedId = $("#studyLocationManualSchedule option:selected").val();
+            getResources(locationSelectedId, "Normal");
+        });
+
+        $('#addSchedulerEventButton').on('click', function (e) {
+            e.preventDefault();
+            var rowId = $("#schedulerTableRowId").val();
+            var currentScheduledDate = document.getElementById(rowId).cells[12].innerHTML;
+            var currentScheduledDateEventId = document.getElementById(rowId).cells[16].innerHTML;
+            if (currentScheduledDate != "" && currentScheduledDateEventId != "") {
+                deleteEvent(currentScheduledDateEventId);
+            }
+            saveEvent(rowId);
+
+        });
+
+        $('#saveManualScheduling').on('click', function (e) {
+            e.preventDefault();
+            var rowId = $("#manualSchedulerTableRowId").val();
+            var today = new Date();
+            var splittedTime = $('#startTimeManualSchedule').val().split(":");
+            today.setHours(splittedTime[0]);
+            today.setMinutes(splittedTime[1]);
+            saveScheduledTime("Manual", today.toISOString(), today.toISOString(), rowId);
+        });
+
+
+        $('#deleteEventButton').on('click', function (e) {
+            // We don't want this to act as a link so cancel the link action
+            e.preventDefault();
+            deleteEvent();
+        });
+
+        $('.fc-prev-button span').click(function () {
+            $('#calendar').fullCalendar('removeEvents');
+        });
+
+        $('.fc-next-button span').click(function () {
+            $('#calendar').fullCalendar('removeEvents');
+        });
+
+        $('#searchAdvancedPatient').on('click', function (e) {
+            e.preventDefault();
+            advancedSearchPatients();
+        });
+
+        $('#searchAdvancedPatientAccept').on('click', function (e) {
+            e.preventDefault();
+            $("#patientAdvancedSearchModal").modal('hide');
+            var selectedDocumentId = $("#selectedPatientDocumentId").val();
+            $("#Patient_DocumentId").val(selectedDocumentId);
+            searchPatient();
+        });
+
+        $('#patientSearchTable').DataTable();
+
+        $('#patientSearchTable tbody').on('click', 'tr', function () {
+            if ($(this).hasClass('selected')) {
+                $(this).removeClass('selected');
+                $("#selectedPatientDocumentId").val("");
+                $('#searchAdvancedPatientAccept').prop('disabled', true);
+            }
+            else {
+                $('tr.selected').removeClass('selected');
+                $(this).addClass('selected');
+                var documentId = $('tr.selected').children("td")[0].innerHTML;
+                $("#selectedPatientDocumentId").val(documentId);
+                $('#searchAdvancedPatientAccept').prop('disabled', false);
+            }
+        });
+
+        $('#searchPhysician').on('click', function (e) {
+            e.preventDefault();
+            searchPhysician();
+        });
+
+        $('#searchPhysicianAccept').on('click', function (e) {
+            e.preventDefault();
+            $("#physicianSearchModal").modal('hide');
+            var phyId = $("#physicianSearchId").val();
+            var phyFullName = $("#physicianSearchFullName").val();
+            $("#PhysicianId").val(phyId);
+            $("#physicianName").val(phyFullName);
+
+        });
+
+        $('#physicianSearchTable').DataTable();
+
+        $('#physicianSearchTable tbody').on('click', 'tr', function () {
+            if ($(this).hasClass('selected')) {
+                $(this).removeClass('selected');
+                $("#physicianSearchId").val("");
+                $("#physicianSearchFullName").val("");
+                $('#searchPhysicianAccept').prop('disabled', true);
+            }
+            else {
+                $('tr.selected').removeClass('selected');
+                $(this).addClass('selected');
+                var id = $('tr.selected').children("td")[0].innerHTML;
+                var phyFullName = $('tr.selected').children("td")[1].innerHTML + " " + $('tr.selected').children("td")[2].innerHTML
+                $("#physicianSearchId").val(id);
+                $("#physicianSearchFullName").val(phyFullName);
+                $('#searchPhysicianAccept').prop('disabled', false);
+            }
+        });
+
+        $('#btnSearchPatient').on('click', function (e) {
+            e.preventDefault();
+            searchPatient();
+        });
+
+        $('#saveNewPhysician').on('click', function (e) {
+            e.preventDefault();
+            saveNewPhysician();
+        });
+
+        $('#saveManualScheduling').on('click', function (e) {
+            e.preventDefault();
+            searchPhysician();
+        });
+
+        $('#saveNewPatient').on('click', function (e) {
+            e.preventDefault();
+            saveNewPhysician();
+        });
+
+        //$("#FastNewPatientForm").validate({
+        //    rules: {
+        //        newPatientDocumentNumber: {
+        //            required: true,
+        //            minlength: 8
+        //        },
+        //    },
+        //    messages: {
+        //        newPatientDocumentNumber: {
+        //            minlength: "Documento debe contener como minimo 8 y como maximo 9 digitos"
+        //        },
+        //    }
+        //});
+
+        $('#fastNewPatientModal').on('hidden.bs.modal', function () {
+            $(this).find("input,textarea").val('').end();
+            $(this).find("span").text('').end();
+            $(this).find("select").val(0).end();
+            $(this).validate().resetForm();
+            $(this).find('.error').removeClass('error');
+
+        });
+
+        $('#savePriceForm').submit(function (e) {
+            e.preventDefault();
+            // or return false;
+        });
+
+        $('#savePrice').on('click', function (e) {
+            e.preventDefault();
+            var rowId = $("#price-row-id").val();
+            var subtotal;
+            subtotal = $("#priceValue").val() * $("#quantityLaterality").val();
+            var totalPrice =0;
+
+
+
+
+
+            if ($("#quantityLaterality").val() <= 0) {
+                showErrorNotification('Ingrese una Cantidad mayor que 0.', 'danger');
+            }
+            else if ($("#priceValue").val() <= 0) {
+                showErrorNotification('Ingrese un Precio Unitario mayor que 0.', 'danger');
+            }
+            else {
+                $('#priceModal').modal('hide');
+                document.getElementById(rowId).cells[6].innerHTML = $("#priceValue").val();
+                document.getElementById(rowId).cells[13].innerHTML = $("#priceValue").val();
+                document.getElementById(rowId).cells[14].innerHTML = $("#priceOption").prop('selectedIndex');
+                document.getElementById(rowId).cells[7].innerHTML = "S/." + subtotal;
+                document.getElementById(rowId).cells[19].innerHTML = subtotal;
+                document.getElementById(rowId).cells[5].innerHTML = $("#quantityLaterality").val();
+                showSuccessNotification("El precio del estudio se modifico satisfactoriamente");
+                tableCountrows = document.getElementById("study_table").rows.length;
+
+                for (var i = 1; i < tableCountrows; i++) {
+                    totalPrice = totalPrice + parseFloat(document.getElementById("study_table").rows[i].cells[19].innerHTML);
+
+                }
+
+                $("#study_table tfoot").empty();
+                $("#study_table tfoot").append("Total: S/." + parseFloat(totalPrice).toFixed(2));
+            }
+        });
+
+        $('#saveNewFastPatient').on('click', function (e) {
+            e.preventDefault();
+            if ($("#FastNewPatientForm").valid()) {
+                var data = {
+                    DocumentId: $("#newPatientDocumentNumber").val(),
+                    FirstName: $("#newPatientFirstName").val(),
+                    LastName: $("#newPatientLastName").val(),
+                    DateOfBirth: $("#newPatientDOB").val(),
+                    Gender: $("#newPatientGender").val(),
+                    MRN: $("#newPatientMRN").val(),
+                    Email: $("#newPatientEmail").val(),
+                    Phone: $("#newPatientPhone").val()
+                }
+                $.ajax({
+                    type: 'POST',
+                    url: '/Patient/CreatePatient',
+                    dataType: 'json',
+                    data: data,
+                    success: function (response) {
+                        $("#fastNewPatientModal").modal('hide');
+                        if (response.success) {
+                            showSuccessNotification("Paciente creado satisfactoriamente");
+                            var selectedDocumentId = response.responseText;
+                            $("#Patient_DocumentId").val(selectedDocumentId);
+                            searchPatient();
+                        } else {
+                            showErrorNotification("Sucedio un error creado el Paciente, por favor contacte el centro de soporte.");
+                        }
+                    },
+                    error: function (ex) {
+                        showErrorNotification(ex.responseText);
+                    }
+                });
+            }
+        });
+    });
+
+    function AddStudyRow(rowId, isMainExam) {
+        var centerCell = "<td width='5%' style='padding-top:15px'></td>";
+        var roomCell = "<td width='8%' style='padding-top:15px'></td>";
+        var studyCell = "<td width='20%' style='padding-top:15px'></td>";
+        var studyDuration = '<td width="4%" style="padding-top:15px">--</td>';
+        var scheduledDate = '<td width="16%" style="padding-top:15px">No Agendado</td>';
+        var quantityLatCell = '<td width="4%" contenteditable="true" style="padding-top:15px">--</td>';
+        var price = '<td width="8%" contenteditable="true" style="padding-top:15px">--</td>';
+        var subtotalCell = '<td width="8%" style="padding-top:15px">--</td>';
+
+        var studyPriceButton = '<a href="javascript:void();" onclick="showStudyPriceDialog(' + rowId + ');" title="Precio del Estudio"  style="width:40px" class="btn btn-success btn-sm"><i class="fas fa-dollar-sign"></i> </a> ';
+
+        var calendarButton = '<a href="javascript:void();" onclick="showCalendarDialog(' + rowId + ');" title="Calendario" style="width:40px" class="btn btn-primary btn-sm"><i class="fas fa-calendar-alt"></i> </a> ';
+        var manualCalendarButton = '<a href="javascript:void();" onclick="showBestFitDialog(' + rowId + ');" title="Calendario Manual" style="width:40px" class="btn btn-warning btn-sm"><i class="fas fa-calendar-plus"></i> </a> ';
+        var removeStudyButton = '<a href="javascript:void();" onclick="removeStudy(' + rowId + ');" title="Remover Estudio" style="width:40px" class="btn btn-danger btn-sm"><i class="fas fa-trash-alt"></i></a>';
+
+        var actionButtons = '<td width="18%">' + studyPriceButton + manualCalendarButton + calendarButton + removeStudyButton + '</td>';
+
+        var hiddenRows = "<td hidden></td><td hidden></td>td hidden></td><td hidden></td><td hidden></td><td hidden></td><td hidden></td><td hidden></td><td hidden></td><td hidden></td><td hidden></td><td hidden></td></td><td hidden></td><td hidden></td><td hidden></td>"
+        var row = "<tr id='" + rowId + "'>" + centerCell + roomCell + studyCell + studyDuration + scheduledDate + quantityLatCell + price + subtotalCell + actionButtons + hiddenRows + "</tr>";
+        return row;
+    }
+
+    function saveScheduledTime(type, startDate, endDate, rowId, eventId) {
+        var isRegular = (type == "Regular");
+        var roomDropDownName = isRegular ? "#studyLocationSelect" : "#studyLocationManualSchedule";
+        var resourceDropDownName = isRegular ? "#studyResourceSelect" : "#studyResourceManualSchedule";
+        var dialogName = isRegular ? "#schedulerDialog" : "#overBookingSchedulerModal";
+        var roomName = $(roomDropDownName + " option:selected").text();
+        var roomId = $(roomDropDownName + " option:selected").val();
+        var resourceName = $(resourceDropDownName + " option:selected").text();
+        var resourceId = $(resourceDropDownName + " option:selected").val();
+
+        if (roomName == "Seleccionar") {
+            showErrorNotification("Por favor seleccione una sala");
+        }
+        if (resourceName == "Seleccionar") {
+            showErrorNotification("Por favor seleccione un equipo");
+        } else {
+            $(dialogName).modal('hide');
+            if (startDate != null && startDate != "") {
+                //moment().format('LLLL'); // Wednesday, August 8, 2018 10:45 PM
+                //moment().format('llll'); // Wed, Aug 8, 2018 10:45 PM
+
+
+                document.getElementById(rowId).cells[4].innerHTML = moment(startDate).format('LLLL');
+                var timeDifference = moment(endDate).diff(moment(startDate));
+                if (isRegular) {
+                    var studyDuration = moment.duration(timeDifference).asMinutes();
+                    document.getElementById(rowId).cells[3].innerHTML = studyDuration;
+                }
+
+                document.getElementById(rowId).cells[1].innerHTML = roomName + " / " + resourceName;
+                document.getElementById(rowId).cells[9].innerHTML = roomId;
+                document.getElementById(rowId).cells[10].innerHTML = resourceId;
+                document.getElementById(rowId).cells[12].innerHTML = moment(startDate).format();
+                document.getElementById(rowId).cells[16].innerHTML = eventId;
+            } else {
+                document.getElementById(rowId).cells[1].innerHTML = "";
+                document.getElementById(rowId).cells[3].innerHTML = "--";
+                document.getElementById(rowId).cells[4].innerHTML = "No Agendado";
+                document.getElementById(rowId).cells[9].innerHTML = "--";
+                document.getElementById(rowId).cells[10].innerHTML = "";
+                document.getElementById(rowId).cells[12].innerHTML = "";
+                document.getElementById(rowId).cells[16].innerHTML = "";
+                document.getElementById(rowId).cells[17].innerHTML = "";
+            }
+
+        }
+
+    }
+
+    function saveNewPhysician() {
+        var phyFirstName = $('#newPhysicianFirstName').val();
+        var phyLastName = $('#newPhysicianLastName').val();
+        var phyLicenseNumber = $('#newPhysicianLicenseNumber').val();
+        $("#newPhysicianErrorMessage").css('display', 'none');
+        if (validateNewPhysician(phyFirstName, phyLastName, phyLicenseNumber)) {
+            $.ajax({
+                type: 'POST',
+                url: '/Scheduler/SavePhysician',
+                data: { phyFirstName: phyFirstName, phyLastName: phyLastName, phyLicenseNumber: phyLicenseNumber },
+                success: function (response) {
+                    if (response.success) {
+                        $("#physicianName").val(phyFirstName + " " + phyLastName);
+                        $("#PhysicianId").val(response.phyId);
+                        $('#newPhysicianModal').modal('hide');
+                    }
+                },
+                error: function (ex) {
+                    alert(ex.responseText);
+                }
+            });
+        } else {
+            $("#newPhysicianErrorMessage").css('display', 'block');
+        }
+    }
+
+    function validateNewPhysician(phyFirstName, phyLastName, phyLicenseNumber) {
+        var success = false;
+        if (phyFirstName.trim() != "" && phyLastName.trim() != "" && phyLicenseNumber.trim() != "") {
+            success = true;
+        }
+        return success;
+    }
+
+    function showPhysicianSearch(e) {
+        e.preventDefault();
+        $('#physicianFirstNameSearch').val("");
+        $('#physicianLastNameSearch').val("");
+        $("#physicianFirstNameSearchError").css('display', 'none');
+        $("#physicianLastNameSearchError").css('display', 'none');
+        $('#tablePhysicianSearchDiv').css('display', 'none');
+        $('#searchPhysicianAccept').prop('disabled', true);
+        $("#physicianSearchId").val("");
+        $("#physicianSearchFullName").val("");
+        $('#physicianSearchModal').modal('toggle');
+    }
+
+    function newPhysician(e) {
+        e.preventDefault();
+        $('#newPhysicianFirstName').val("");
+        $('#newPhysicianLastName').val("");
+        $('#newPhysicianLicenseNumber').val("");
+        $("#newPhysicianErrorMessage").css('display', 'none');
+        $('#newPhysicianModal').modal('toggle');
+    }
+
+    function newPatient(e) {
+        e.preventDefault();
+
+        $('#newPhysicianFirstName').val("");
+        $('#newPhysicianLastName').val("");
+        $('#newPhysicianLicenseNumber').val("");
+        $("#newPhysicianErrorMessage").css('display', 'none');
+        $('#fastNewPatientModal').modal('toggle');
+    }
+
+    function searchPhysician() {
+        var phyFirstName = $("#physicianFirstNameSearch").val();
+        var phyLastName = $("#physicianLastNameSearch").val();
+
+        $.ajax({
+            type: 'POST',
+            url: '/Scheduler/SearchPhysicians',
+            data: { phyFirstName: phyFirstName, phyLastName: phyLastName },
+            success: function (response) {
+                if (response.success) {
+                    $('#tablePhysicianSearchDiv').css('display', 'block');
+                    var table = $('#physicianSearchTable').DataTable({
+                        "destroy": true,
+                        "searching": false,
+                        "lengthChange": false,
+                        "pageLength": 5,
+                        "ordering": false,
+                        "rowId": "Id",
+                        "data": response.responseText,
+                        "language": {
+                            "emptyTable": "No se encontro informacion",
+                            "search": "_INPUT_",
+                            "searchPlaceholder": "Busqueda...",
+                            "info": "Total de medicos: <b> _TOTAL_ </b>",
+                            "next": "Siguiente",
+                            "previous": "Anterior"
+                        },
+                        "columns":
+                            [
+                                { "data": "Id", "width": "10%" },
+                                { "data": "FirstName", "width": "45%" },
+                                { "data": "LastName", "width": "45%" }
+                            ]
+                    });
+                } else {
+                    $('#tablePhysicianSearchDiv').css('display', 'none');
+                }
+            },
+            error: function (ex) {
+                showErrorNotification(ex.responseText);
+            }
+        });
+    }
+
+    function getResources(locationId, screen) {
+        var resourceDropDownName = screen == "Regular" ? "#studyResourceSelect" : "#studyResourceManualSchedule";
+        var rowId = screen == "Regular" ? $("#schedulerTableRowId").val() : $("#manualSchedulerTableRowId").val();
+        var selectedResourceId = document.getElementById(rowId).cells[8].innerHTML;
+        $(resourceDropDownName).empty();
+        var selectOption = "<option value=-1>Seleccionar</option>";
+        $(resourceDropDownName).append(selectOption);
+        $.ajax({
+            type: 'POST',
+            url: '/Scheduler/GetLocationResources',
+            data: { locationId: locationId },
+            success: function (response) {
+                if (response.success) {
+                    $.each(response.resourceList, function (i, result) {
+                        var selected = selectedResourceId == result.Id ? " selected" : "";
+                        var dropDownData = '<option value="' + result.Id + '"' + selected + '>' + result.Name + '</option>';
+                        $(resourceDropDownName).append(dropDownData);
+                    });
+                } else {
+                    showErrorNotification(response.responseText);
+                }
+            },
+            error: function (ex) {
+                showErrorNotification(ex.responseText);
+            }
+        });
+    }
+
+    function showBestFitDialog(rowId) {
+        getStudyLocations("Manual", rowId);
+    }
+
+    function displayCalendar(resourceId) {
+        var studyDuration = $('#schedulerStudyDuration').val();
+
+        var calendarEl = document.getElementById('calendar');
+        $("#calendar").empty();
+        calendar = new FullCalendar.Calendar(calendarEl, {
+            plugins: ["bootstrap", "interaction", "dayGrid", "timeGrid"],
+            editable: true,
+            droppable: true,
+            selectable: true,
+            defaultView: "timeGridWeek",
+            themeSystem: "bootstrap",
+            allDaySlot: false,
+            header: { left: "today", center: "title", right: "prev,next" },
+
+            headerToolbar: {
+                left: 'today',
+                center: 'title',
+                right: 'prev,next'
+            },
+
+            firstDay: 1,
+            slotDuration: '00:15:00',
+            slotLabelInterval: 15,
+            slotMinutes: 15,
+            locale:'es',
+            events: {
+                url: '/Scheduler/GetScheduledExams',
+                extraParams: {
+                    centerId: $('#Center_Id').val(),
+                    resourceId: $("#studyResourceSelect").val(),
+                    patientId: $('#Patient_DocumentId').val(),
+                    studyId: $('#schedulerStudyId').val()
+                }
+            },
+            slotLabelFormat: { // like '14:30:00'
+                hour: '2-digit',
+                minute: '2-digit',
+                meridiem: 'short'
+            },
+            selectConstraint: "testGroupId",
+            //slotDuration: '00:' + studyDuration + ':00',
+
+            //slotLabelFormat: 'hh(:mm) a',
+            minTime: '@ViewBag.CenterStartTime',
+            maxTime: '@ViewBag.CenterEndTime',
+            height: 'auto',
+            selectOverlap: function (event) {
+                return event.rendering === 'inverse-background';
+            },
+            eventClick: function (event, jsEvent, view) {
+                var endTime = $.fullCalendar.moment(event.end).format('h:mm a');
+                var startTime = $.fullCalendar.moment(event.start).format('dddd,  MMMM Do YYYY, h:mm a');
+                var centerSelected = $("#CenterId option:selected").text();
+                $('#deleteSchedulerEventModal #Date').text(startTime + " - " + endTime);
+                $('#deleteSchedulerEventModal #eventID').val(event.id);
+                $('#deleteSchedulerEventModal').modal();
+            },
+            select: function (info) {
+                moment().locale();
+                moment().format('')
+                var rowId = $("#schedulerTableRowId").val();
+                var selectedStartDate = document.getElementById(rowId).cells[12].innerHTML;
+                var startDate = moment(info.start, "YYYYMMDD HH:mm:ss");
+                var endDate = moment(info.end, "YYYYMMDD HH:mm:ss");
+                var formattedStartDate = moment(info.start).format('LLLL');
+                var duration = endDate.diff(startDate, "minutes")
+                $('#createSchedulerEventModal #StartTime').val(info.startStr);
+                $('#createSchedulerEventModal #EndTime').val(info.endStr);
+                if (selectedStartDate != "") {
+                    $("#createSchedulerEventModal #schedulerPreviousAppointmentMessage").css('display', 'block');
+                    $('#createSchedulerEventModal #schedulerPreviousAppointmentStartDate').text(moment(selectedStartDate).format('LLLL'));
+                    $('#createSchedulerEventModal #schedulerAppointmentStartDateLabel').text("Nueva Fecha:");
+                    $('#createSchedulerEventModal #previousAppointmentId').text(document.getElementById(rowId).cells[14].innerHTML);
+                } else {
+                    $("#createSchedulerEventModal #schedulerPreviousAppointmentMessage").css('display', 'none');
+                    $('#createSchedulerEventModal #schedulerAppointmentStartDateLabel').text("Fecha:");
+                }
+                $('#createSchedulerEventModal #schedulerAppointmentStartDate').text(formattedStartDate);
+                $('#createSchedulerEventModal #schedulerAppointmentDuration').text(duration + " minutos");
+                $('#createSchedulerEventModal').modal('toggle');
+            },
+            eventDrop: function (event, delta) {
+                var eventId = event.id;
+                var startDate = moment(event.start).format();
+                var endDate = moment(event.end).format();
+                updateEvent(eventId, startDate, endDate);
+            },
+            eventResize: function (event) {
+                var eventId = event.id;
+                var startDate = moment(event.start).format();
+                var endDate = moment(event.end).format();
+                updateEvent(eventId, startDate, endDate);
+            }
+        });
+        calendar.render();
+    }
+
+    function saveEvent(rowId) {
+        $("#createSchedulerEventModal").modal('hide');
+        var startDate = $('#StartTime').val();
+        var endDate = $('#EndTime').val();
+        var centerId = $('#Center_Id').val();
+        var patientId = $('#Patient_DocumentId').val();
+        var roomId = $("#studyLocationSelect option:selected").val();
+        var resourceId = $("#studyResourceSelect option:selected").val();
+        var eventId = -1;
+
+        var data = {
+            StartDate: startDate,
+            EndDate: endDate,
+            CenterId: centerId,
+            RoomId: roomId,
+            ResourceId: resourceId,
+            PatientId: patientId
+        }
+
+        $.ajax({
+            type: 'POST',
+            url: '/Scheduler/SaveSchedulerEvent',
+            data: data,
+            success: function (response) {
+                if (response.success) {
+                    eventId = response.Id;
+                    calendar.addEvent({
+                        id: response.Id,
+                        title:'test',
+                        start: startDate,
+                        end: endDate,
+                        constraint: '1000',
+                        groupId: 'testGroupId',
+                        color: 'green',
+                        rendering: 'background'
+                    });
+                    calendar.render();
+                    saveScheduledTime("Regular", startDate, endDate, rowId, eventId);
+                } else {
+                    showErrorNotification(response.responseText);
+                }
+            },
+            error: function (ex) {
+                showErrorNotification(ex.responseText);
+            }
+        });
+    }
+
+    function updateEvent(id, start, end) {
+        var centerId = $('#Center_Id').val();
+        var roomId = $('#studyLocationSelect').val();
+
+        var data = {
+            Id: id,
+            StartDate: start,
+            EndDate: end,
+            CenterId: centerId,
+            RoomId: roomId,
+        }
+        $.ajax({
+            type: 'POST',
+            url: '/Scheduler/UpdateSchedulerEvent',
+            data: data,
+            success: function (response) {
+                if (!response.success) {
+                    showErrorNotification(response.responseText);
+                } else {
+                    $("#StartTime").val(start);
+                    $("#EndTime").val(end);
+                }
+            },
+            error: function (ex) {
+                showErrorNotification(ex.responseText);
+            }
+        });
+    }
+
+    function deleteEvent(eventId) {
+        $.ajax({
+            type: 'POST',
+            url: '/Scheduler/DeleteSchedulerEvent',
+            data: { eventId: eventId },
+            success: function (response) {
+                if (response.success) {
+                    var event = calendar.getEventById(eventId);
+                    if (event != null) {
+                        event.remove();
+                    }
+                    calendar.render();
+                } else {
+                    showErrorNotification(response.responseText);
+                }
+            },
+            error: function (ex) {
+                showErrorNotification(ex.responseText);
+            }
+        });
+    }
+    function showStudyPriceDialog(rowId) {
+        var studyName = document.getElementById(rowId).cells[2].innerHTML;
+        var studyPrices = JSON.parse(document.getElementById(rowId).cells[15].innerHTML);
+        var quantityLaterality = document.getElementById(rowId).cells[5].innerHTML;
+
+        $("#priceOption").empty();
+        $("#priceValue").val("");
+        $("#quantityLaterality");
+        $("#priceDescription").text(studyName);
+
+        $.each(studyPrices, function (key, value) {
+            var dropDownData = '<option value="' + (value == "null" ? "0" : value) + '">' + key + '</option>';
+            $("#priceOption").append(dropDownData);
+        });
+        $("#priceValue").val($("#priceOption option:first").val());
+        $("#quantityLaterality").val(quantityLaterality);
+        $("#price-row-id").val(rowId);
+
+        var selectedPrice = document.getElementById(rowId).cells[6].innerHTML;
+        var selectedPriceOption = document.getElementById(rowId).cells[14].innerHTML;
+        var selectedquantityLaterality = document.getElementById(rowId).cells[5].innerHTML;
+
+        if (selectedPrice != "" && selectedPriceOption != "") {
+            $('#priceOption :nth-child(' + (parseInt(selectedPriceOption) + 1) + ')').prop('selected', true);
+            $("#priceValue").val(selectedPrice);
+            $("#quantityLaterality").val(selectedquantityLaterality);
+            if ((parseInt(selectedPriceOption) + 1) == 5) {
+                $("#priceValue").prop('readonly', false);
+            } else {
+                $("#priceValue").prop('readonly', true);
+            }
+        } else {
+            $("#priceValue").prop('readonly', true);
+        }
+
+        $("#priceValue").prop('readonly', false);
+        $("#quantityLaterality").prop('readonly', false);
+
+        $('#priceModal').modal('toggle');
+    }
+
+    function showCalendarDialog(rowId) {
+        getStudyLocations("Regular", rowId);
+    }
+
+    function getStudyLocations(screen, rowId) {
+        var studyId = document.getElementById(rowId).cells[11].innerHTML;
+        var studyDuration = document.getElementById(rowId).cells[3].innerHTML;
+        var studyLocationId = document.getElementById(rowId).cells[9].innerHTML;
+        var centerId = $("#Center_Id").val();
+        var locationDropDownName = screen == "Regular" ? "#studyLocationSelect" : "#studyLocationManualSchedule";
+        $(locationDropDownName).empty();
+        var selectOption = "<option value=-1>Seleccionar</option>";
+        $(locationDropDownName).append(selectOption);
+        $.ajax({
+            type: 'POST',
+            url: '/Scheduler/GetStudyLocations',
+            data: { studyId: studyId, centerId: centerId },
+            success: function (response) {
+                if (response.success) {
+                    $.each(response.locations, function (i, result) {
+                        var selected = studyLocationId == result.Id ? " selected" : "";
+                        var dropDownData = '<option value="' + result.Id + '"' + selected + '>' + result.Name + '</option>';
+                        $(locationDropDownName).append(dropDownData);
+                    });
+                    $("#schedulerStudyId").val(studyId);
+                    $("#schedulerStudyDuration").val(studyDuration);
+
+                    if (screen == "Regular") {
+                        $("#schedulerTableRowId").val(rowId);
+                        if (studyLocationId != "") {
+                            $(locationDropDownName).val(studyLocationId).trigger("change");
+                        }
+                        $('#schedulerDialog').modal('toggle');
+                    } else {
+                        $("#manualSchedulerTableRowId").val(rowId);
+                        $("#startTimeManualSchedule").val(moment().format("HH:mm"));
+                        $('#overBookingSchedulerModal').modal('toggle');
+                    }
+                } else {
+                    showErrorNotification(response.responseText);
+                }
+            },
+            error: function (ex) {
+                showErrorNotification(ex.responseText);
+            }
+        });
+    }
+
+    function removeStudy(rowId) {
+        var currentScheduledDate = document.getElementById(rowId).cells[12].innerHTML;
+        var currentScheduledDateEventId = document.getElementById(rowId).cells[16].innerHTML;
+        var totalPrice = 0;
+        if (currentScheduledDate != "" && currentScheduledDateEventId != "") {
+            deleteEvent(currentScheduledDateEventId);
+        }
+
+        document.getElementById(rowId).remove();
+        var isFirstRow = false;
+        var rowsCount = $('#study_table tbody').children('tr').length;
+        if (rowsCount === 1) {
+            isFirstRow = true;
+        }
+        if (isFirstRow) {
+            $("#sameImageDiv").css('display', 'none');
+        }
+        tableCountrows = document.getElementById("study_table").rows.length;
+        for (var i = 1; i < tableCountrows; i++) {
+            totalPrice = totalPrice + parseFloat(document.getElementById("study_table").rows[i].cells[19].innerHTML);
+
+        }
+        $("#study_table tfoot").empty();
+        $("#study_table tfoot").append("Total: S/." + parseFloat(totalPrice).toFixed(2));
+
+    }
+
+    function getRoomInformation(centerId) {
+        $("#Location_Id").empty();
+        $("#Location_Id").append('<option value="">Filtrar por Sala</option>');
+        populateData(centerId, "GetLocationInformation", "Location_Id");
+    }
+
+    function getResourceInformation(centerId) {
+        $("#Resource_Id").empty();
+        $("#Resource_Id").append('<option value="">Filtrar por Recurso</option>');
+        populateData(centerId, "GetResourceInformation", "Resource_Id");
+    }
+
+    function getStudyInformation(centerId) {
+        $("#Study_Id").empty();
+        $("#Study_Id").append('<option value="">Porfavor seleccione</option>');
+        populateData(centerId, "GetStudyInformation", "Study_Id");
+    }
+
+    function advancedPatientSearch() {
+        $('#patientIdSearch').val("");
+        $('#patientFirstNameSearch').val("");
+        $('#patientLastNameSearch').val("");
+        $("#patientIdSearchError").css('display', 'none');
+        $("#patientFirstNameSearchError").css('display', 'none');
+        $("#patientLastNameSearchError").css('display', 'none');
+        $('#tableSearchDiv').css('display', 'none');
+        $("#selectedPatientDocumentId").val("");
+        $('#searchAdvancedPatientAccept').prop('disabled', true);
+        $('#patientAdvancedSearchModal').modal('toggle');
+    }
+
+    function populateData(centerId, actionName, destinationDropdown) {
+        blockUI();
+        $.ajax({
+            type: 'POST',
+            url: '/Scheduler/' + actionName,
+            dataType: 'json',
+            data: { centerId: centerId },
+            success: function (result) {
+                if (result.success) {
+                    $.each(result.responseText, function (i, result) {
+                        var dropDownData = '<option value="' + result.Value + '">' + result.Text + '</option>';
+                        $("#" + destinationDropdown).append(dropDownData);
+                    });
+                } else {
+                    unblockUI();
+                    showErrorNotification(result.responseText);
+                }
+            },
+            error: function (ex) {
+                unblockUI();
+                showErrorNotification('populateData ' + ex.responseText);
+            }
+        }).done(function () {
+            unblockUI();
+        });
+    }
+
+    function disableControls() {
+        $("#Patient_DocumentType").prop('disabled', true);
+        $("#Patient_DocumentId_2").prop('readonly', true);
+        $("#Patient_FirstName").prop('readonly', true);
+        $("#Patient_LastName").prop('readonly', true);
+        $("#Patient_Gender").prop('disabled', true);
+        $("#Patient_MaritalStatus").prop('disabled', true);
+        $("#Patient_DateOfBirth").prop('readonly', true);
+        $("#Patient_AgeAsString").prop('readonly', true);
+        $("#Patient_MRN").prop('readonly', true);
+        $("#Patient_Nationality").prop('readonly', true);
+        $("#Patient_FullAddress").prop('readonly', true);
+        $("#Patient_ZipCode").prop('readonly', true);
+        $("#Patient_CountryId").prop('disabled', true);
+        $("#Patient_DepartmentId").prop('disabled', true);
+        $("#Patient_ProvinceId").prop('disabled', true);
+        $("#Patient_DistrictId").prop('disabled', true);
+        $("#Patient_Phone").prop('readonly', true);
+        $("#Patient_MobilePhone").prop('readonly', true);
+        $("#Patient_Email").prop('readonly', true);
+    }
+
+    function searchPatient() {
+        var patientDocumentIdValue = $("#Patient_DocumentId").val();
+        if (patientDocumentIdValue == null || patientDocumentIdValue.trim() == "") {
+            $("#patientInformation").css('display', 'none');
+            $("#patientNotFound").css('display', 'block');
+            $("#messagePatientNotFound").text("Porfavor ingrese un identificador valido para el paciente");
+            $("#Patient_Id").val(0);
+            $("#editPatientDiv").css('display', 'none');
+            return;
+        }
+        blockUI();
+        $.ajax({
+            type: 'POST',
+            url: '@Url.Action("GetPatientInformation", "Scheduler")',
+            dataType: 'json',
+            data: { patientDocumentId : patientDocumentIdValue },
+            success: function (result) {
+                if (result.success) {
+                    var patients = JSON.parse(result.responseText);
+                    $("#patientInformation").css('display', 'block');
+                    $("#patientNotFound").css('display', 'none')
+                    $("#Patient_Id").val(patients.Id);
+                    $("#Patient_DocumentType").val(patients.DocumentType);
+                    $("#Patient_DocumentId_2").val(patients.DocumentId);
+                    $("#Patient_FirstName").val(patients.FirstName);
+                    $("#Patient_LastName").val(patients.LastName);
+                    $("#Patient_MaritalStatus").val(patients.MaritalStatus);
+                    $("#Patient_Gender").val(patients.Gender);
+                    $("#Patient_DateOfBirth").val(moment(patients.DateOfBirth).format('YYYY-MM-DD'));
+                    $("#Patient_AgeAsString").val(patients.AgeAsString);
+                    $("#Patient_MRN").val(patients.MRN);
+                    $("#Patient_MobilePhone").val(patients.MobilePhone);
+                    $("#Patient_Email").val(patients.Email);
+                    $("#Patient_FullAddress").val(patients.FullAddress);
+
+                    $("#editPatientDiv").css('display', 'block');
+                } else {
+                    unblockUI();
+                    $("#patientInformation").css('display', 'none');
+                    $("#patientNotFound").css('display', 'block');
+                    $("#messagePatientNotFound").text(result.responseText);
+                    $("#Patient_Id").val(0);
+                }
+            },
+            error: function (ex) {
+                unblockUI();
+                showErrorNotification('searchPatient ' + ex.responseText);
+            }
+        }).done(function () {
+            unblockUI();
+        });
+    }
+
+    function searchIsValid() {
+        var patientIdError = false;
+        var patientFirstNameError = false;
+        var patientLastNameError = false;
+
+        if ($('#patientIdSearch').val().length > 0 && $('#patientIdSearch').val().length < 3) {
+            $("#patientIdSearchError").css('display', 'block');
+            patientIdError = true;
+        }
+        if ($('#patientFirstNameSearch').val().length > 0 && $('#patientFirstNameSearch').val().length < 3) {
+            $("#patientFirstNameSearchError").css('display', 'block');
+            patientFirstNameError = true;
+        }
+        if ($('#patientLastNameSearch').val().length > 0 && $('#patientLastNameSearch').val().length < 3) {
+            $("#patientLastNameSearchError").css('display', 'block');
+            patientLastNameError = true;
+        }
+        if (patientIdError || patientFirstNameError || patientLastNameError) {
+            return false;
+        } else {
+            return true;
+        }
+    }
+
+    function advancedSearchPatients() {
+        if (!searchIsValid()) {
+            return;
+        }
+
+        $("#patientIdSearchError").css('display', 'none');
+        $("#patientFirstNameSearchError").css('display', 'none');
+        $("#patientLastNameSearchError").css('display', 'none');
+
+        var patientId = $('#patientIdSearch').val();
+        var patientFirstName = $('#patientFirstNameSearch').val();
+        var patientLastName = $('#patientLastNameSearch').val();
+
+        $.ajax({
+            type: 'POST',
+            url: '/Scheduler/SearchPatients',
+            data: { patientId: patientId, patientFirstName: patientFirstName, patientLastName: patientLastName },
+            success: function (response) {
+                if (response.success) {
+                    $('#tableSearchDiv').css('display', 'block');
+                    var table = $('#patientSearchTable').DataTable({
+                        "destroy": true,
+                        "searching": false,
+                        "lengthChange": false,
+                        "pageLength": 4,
+                        "ordering": false,
+                        "rowId": "Id",
+                        "data": JSON.parse(response.responseText),
+                        "language": {
+                            "emptyTable": "No se encontro informacion",
+                            "search": "_INPUT_",
+                            "searchPlaceholder": "Busqueda...",
+                            "info": "Total de pacientes: <b> _TOTAL_ </b>",
+                            "next": "Siguiente",
+                            "previous": "Anterior"
+                        },
+                        "columns":
+                            [
+                                { "data": "DocumentId","width":"14%" },
+                                { "data": "FirstName", "width": "36%" },
+                                { "data": "LastName", "width": "36%" },
+                                {
+                                    "data": "DateOfBirth",
+                                    "render": function (data, type, row) {
+                                        if (type === "sort" || type === "type") {
+                                            return data;
+                                        }
+                                        return data == null ? "" : moment(data).format("DD/MM/YYYY");
+                                    },
+                                    "width":"14%"
+                                }
+                            ]
+                    });
+                } else {
+                    $('#tableSearchDiv').css('display', 'none');
+                }
+            },
+            error: function (ex) {
+                alert(ex.responseText);
+            }
+        });
+    }
+
+    function GetStudiesData() {
+        var arrayData = [];
+        $("#study_table tbody tr").each(function () {
+            var centerId = $("#Center_Id").val();
+            var roomName = $(this).find("td").eq(1).text();
+            var studyDescription = $(this).find("td").eq(2).text();
+            var studyDuration = $(this).find("td").eq(3).text();
+            var locationId = $(this).find("td").eq(9).text();
+            var resourceId = $(this).find("td").eq(10).text();
+            var studyId = $(this).find("td").eq(11).text();
+            var scheduledDate = $(this).find("td").eq(12).text();
+            var studyPrice = $(this).find("td").eq(6).text();
+            var studyPriceDescription = $(this).find("td").eq(14).text();
+            var studyLaterality = $(this).find("td").eq(17).text();
+            var quantityLaterality = $(this).find("td").eq(5).text();
+            var subtotal = parseFloat($(this).find("td").eq(19).text()).toFixed(2);
+            var RequireComplementaryStudy = $(this).find("td").eq(21).text();
+            var requireLaterality = $(this).find("td").eq(22).text();;
+            var data = {
+                StudyId: studyId,
+                StudyDescription: studyDescription,
+                LocationId: locationId,
+                ResourceId: resourceId,
+                CenterId: centerId,
+                ScheduledDate: scheduledDate,
+                StudyDuration: studyDuration,
+                StudyPrice: studyPrice,
+                StudyPriceDescription: studyPriceDescription,
+                RoomName: roomName,
+                StudyLaterality: studyLaterality,
+                QuantityLaterality: quantityLaterality,
+                RequireComplementaryStudy: RequireComplementaryStudy,
+                RequireLaterality: requireLaterality,
+                Subtotal: subtotal
+            };
+            arrayData.push(data);
+        })
+
+        return arrayData;
+    }
+
+    function ValidateData(data) {
+        var responseMessage = [];
+        if (data != null && data.length > 0) {
+            for (var i = 0; i < data.length; i++) {
+                var studyName = data[i].StudyDescription;
+                var scheduledDate = data[i].ScheduledDate;
+                var studyPrice = data[i].StudyPrice;
+                if (scheduledDate == "") {
+                    responseMessage.push("El estudio " + studyName + " no tiene un horario asignado");
+                }
+                if (studyPrice == "") {
+                    responseMessage.push("El estudio " + studyName + " no tiene precio asignado");
+                }
+            }
+        } else {
+            responseMessage.push("No existen estudios seleccionados");
+        }
+        return responseMessage;
+    }
+
+    var form = $("#SchedulerForm");
+    $("#basic-example").steps(
+        {
+            headerTag: "h3",
+            bodyTag: "section",
+            transitionEffect: "none",
+            labels: {
+                current: "Paso actual:",
+                pagination: "Pagina",
+                finish: "Finalizar",
+                next: "Siguiente",
+                previous: "Anterior",
+                loading: "Cargando ..."
+            },
+            onStepChanging: function (event, currentIndex, newIndex) {
+                if (currentIndex === 0) {
+                    var patientId = $("#Patient_Id").val();
+                    if (patientId == null || patientId == "" || patientId == 0) {
+                        showErrorNotification('Porfavor busque un paciente', 'danger');
+                        return false;
+                    }
+                }
+                if (currentIndex === 1) {
+                    var facilityDepartmentId = $("#FacilityDepartmentId").val();
+                    var InsuranceId = $("#InsuranceId").val();
+                    if (facilityDepartmentId == null || facilityDepartmentId == "" || facilityDepartmentId == 0) {
+                        showErrorNotification('Porfavor seleccione un departamento solicitante', 'danger');
+                        return false;
+                    }
+                    if (InsuranceId == null || InsuranceId == "" || InsuranceId == 0) {
+                        showErrorNotification('Porfavor seleccione una compañia de seguro', 'danger');
+                        return false;
+                    }
+                }
+                if (currentIndex === 2) {
+                    var data = GetStudiesData();
+                    $("#confirmExam").empty();
+                    $("#confirmExam").append("<dt class='col-sm-2'>Paciente:</dt><dd class='col-sm-10' id='confirm_patient_document_text'>" + $("#Patient_FirstName").val() + " " + $("#Patient_LastName").val());
+                    $("#confirmExam").append("<dt class='col-sm-2'>Documento:</dt><dd class='col-sm-10' id='confirm_patient_name_text'>" + $("#Patient_DocumentId_2").val() );
+                    $("#confirmExam").append("<dt class='col-sm-2'>Tipo Cita:</dt><dd class='col-sm-10' id='confirm_patient_type_text'>" + $("#PatientType option:selected").text());
+
+                    for (i = 0; i < data.length; i++) {
+                        $("#confirmExam").append("<br/>" + "<br/>" + "<br/>");
+                        $("#confirmExam").append("<dt class='col-sm-2'>Estudio "+(i+1)+':'+"</dt>" +"<dd class='col-sm-10' id='confirm_study_name_text'>" + data[i]["StudyDescription"] );
+                        $("#confirmExam").append("<dt class='col-sm-2'>Fecha Cita:</dt><dd class='col-sm-10' id='confirm_study_date_text'>" + moment(data[i]["ScheduledDate"]).format('LLLL'));
+                        $("#confirmExam").append("<dt class='col-sm-2'>Sala:</dt><dd class='col-sm-10' id='confirm_room_name_text'>" + data[i]["RoomName"]);
+                        $("#confirmExam").append("<br/>" );
+                    }
+
+                    var patientType = $("#PatientType").val();
+                    if (patientType == null || patientType == 0) {
+                        showErrorNotification('Porfavor seleccione un Tipo de Paciente');
+                        return false;
+                    }
+                }
+                form.validate().settings.ignore = ":disabled,:hidden";
+                return form.valid();
+            },
+            onFinishing: function (event, currentIndex) {
+                form.validate().settings.ignore = ":disabled,:hidden";
+                var validator = form.validate();
+                return form.valid();
+            },
+            onFinished: function (event, currentIndex) {
+                blockUI();
+                var data = GetStudiesData();
+                var errorMessages = ValidateData(data);
+                if (errorMessages.length > 0) {
+                    unblockUI();
+                    for (var i = 0; i < errorMessages.length; i++) {
+                        showErrorNotification(errorMessages[i]);
+                    }
+                }
+                else {
+                    if (data != null) {
+                        $("#GroupImages").val(true);
+                        $("#Studies").val(JSON.stringify(data));
+                        event.preventDefault();
+                        var button = $("#SchedulerForm").find('a[href="#finish"]');
+                        button.attr("href", '#finish-disabled');
+                        button.parent().addClass("disabled");
+
+                        form.submit();
+                    }
+                }
+            }
+        })
+
+    $(function () {
+
+    });
+
+
+
+</script>
