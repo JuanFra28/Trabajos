@@ -31,8 +31,9 @@ delays.xlsx  ──►  estandarizar_delays.py  ──►  Analisis_Averias_esta
    python reporte.py Analisis_Averias_estandar.xlsx
    ```
 
-   `reporte.py` no necesita cambios: lee la hoja `Datos`. Si pones
-   `EJECUTAR_REPORTE = True`, el estandarizador lo llama al terminar.
+   `reporte.py` lee la hoja `Datos` y deja `reporte_confiabilidad.html` junto al
+   Excel. Si pones `EJECUTAR_REPORTE = True`, el estandarizador lo llama al
+   terminar. Más abajo se explica qué muestra el reporte.
 
 Requiere `pandas`, `numpy` y `openpyxl` (los mismos que `reporte.py`).
 Opcional: `pip install python-calamine` acelera la lectura de Excel.
@@ -134,3 +135,48 @@ Corrido sobre `delays.xlsx` y comparado con `Analisis_Averias_Mantenimiento-1-2.
 - Da el mismo resultado usando como referencia el Analisis, el
   `Planes_Delays_2026.xlsx` o ambos.
 - `reporte.py` con la salida: 9.543 averías, 3.187 h, 338 activos.
+
+## El reporte (`reporte.py` v5)
+
+Genera un HTML que se abre en cualquier navegador, sin instalar nada. Tiene 5
+pestañas y una barra de filtros (máquinas, meses, y en *Más filtros*: módulo,
+familia, área, tipo, turno, unidad y texto libre):
+
+| Pestaña | Qué responde |
+|---|---|
+| **Resumen** | Cuántas horas se perdieron, en qué máquina, qué tipo de falla, y **dónde actuar primero**: los 5 equipos (máquina · módulo) que más horas perdieron en los últimos 3 meses, con el detalle que más se repite y un siguiente paso |
+| Máquinas | Tabla por máquina, evolución mes a mes, matriz máquina × módulo y los equipos que más pierden |
+| Prioridades | Frecuencia contra duración (Jack-Knife: crítico, crónico, agudo, leve) y los equipos que empeoran o mejoran de forma clara |
+| Fallas | Familias, sistema y detalle (L3/L4), lo que se repite en el mismo equipo y el listado de averías descargable en CSV |
+| Notas | Calidad del dato, cómo se calcula cada número y qué no se puede afirmar |
+
+Cómo calcula, y por qué cambió respecto a la v4:
+
+- **Averías**: une los registros del mismo equipo cuando entre el *fin* de uno y
+  el inicio del siguiente pasan menos de `UNIR_MINUTOS` (15). La v4 medía de
+  inicio a inicio y no unía las paradas partidas en el cambio de turno: una
+  parada de 18 h de PI8 · CS contaba como 4 fallas.
+- **Tendencia**: compara las fallas por mes de la segunda mitad de los meses
+  completos con las de la primera, con la variación real de mes a mes
+  (cuasi-Poisson, 95 %). La v4 usaba Crow-AMSAA, que supone fallas al azar; con
+  rachas como las de estos datos marcaba 37 equipos «empeorando» y 41
+  «mejorando». Ahora son 3 y 13.
+- **Grupos (Jack-Knife)**: límites de Knights (promedios), no medianas, y la
+  duración en minutos.
+- **Se quitaron** Weibull por módulo (daba β < 1, «mortalidad infantil», en
+  el 98 % de los equipos: es efecto de agrupar piezas, no un diagnóstico) y la
+  «disponibilidad» (sin el tiempo programado no se puede calcular).
+- **Textos**: cuenta juntas las variantes de escritura de L3 y L4
+  («Regulacion Electronica», «Regulación electrónica», «Elec - Regulacion
+  Electronica»). Se apaga con `UNIFICAR_TEXTOS = False`.
+
+Configuración principal (inicio del script): `ARCHIVO` (si no existe, busca el
+`Analisis_Averias*.xlsx` más reciente), `SALIDA_HTML`, `UNIR_MINUTOS`,
+`FECHA_INICIO`, `FECHA_FIN`, `MIN_FALLAS_TENDENCIA` (15),
+`MIN_MESES_TENDENCIA` (5), `MESES_RECIENTES` (3) y `TOP_ACCIONES` (5).
+
+Con los datos actuales (01/01 al 03/09/2026): 12.730 registros → 8.548 averías,
+3.187 h, 13 h de avería por día. Las 10 combinaciones máquina · módulo que más
+pierden suman solo el 20 % de las horas; la mitad de las horas tiene un detalle
+genérico («Regulación electrónica», «Falla general»); y en PF5 el 62 % de las
+horas tiene el sistema como «Libre».
