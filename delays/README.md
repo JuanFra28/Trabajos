@@ -31,7 +31,7 @@ delays.xlsx  ──►  estandarizar_delays.py  ──►  Analisis_Averias_esta
    python reporte.py Analisis_Averias_estandar.xlsx
    ```
 
-   `reporte.py` lee la hoja `Datos` y deja `reporte_confiabilidad.html` junto al
+   `reporte.py` lee la hoja `Datos` y deja `reporte_averias.html` junto al
    Excel. Si pones `EJECUTAR_REPORTE = True`, el estandarizador lo llama al
    terminar. Más abajo se explica qué muestra el reporte.
 
@@ -136,47 +136,45 @@ Corrido sobre `delays.xlsx` y comparado con `Analisis_Averias_Mantenimiento-1-2.
   `Planes_Delays_2026.xlsx` o ambos.
 - `reporte.py` con la salida: 9.543 averías, 3.187 h, 338 activos.
 
-## El reporte (`reporte.py` v5)
+## El reporte (`reporte.py`)
 
-Genera un HTML que se abre en cualquier navegador, sin instalar nada. Tiene 5
-pestañas y una barra de filtros (máquinas, meses, y en *Más filtros*: módulo,
-familia, área, tipo, turno, unidad y texto libre):
+Genera `reporte_averias.html`, una sola página que se abre en cualquier
+navegador y responde cuatro preguntas:
 
-| Pestaña | Qué responde |
+| Sección | Qué responde |
 |---|---|
-| **Resumen** | Cuántas horas se perdieron, en qué máquina, qué tipo de falla, y **dónde actuar primero**: los 5 equipos (máquina · módulo) que más horas perdieron en los últimos 3 meses, con el detalle que más se repite y un siguiente paso |
-| Máquinas | Tabla por máquina, evolución mes a mes, matriz máquina × módulo y los equipos que más pierden |
-| Prioridades | Frecuencia contra duración (Jack-Knife: crítico, crónico, agudo, leve) y los equipos que empeoran o mejoran de forma clara |
-| Fallas | Familias, sistema y detalle (L3/L4), lo que se repite en el mismo equipo y el listado de averías descargable en CSV |
-| Notas | Calidad del dato, cómo se calcula cada número y qué no se puede afirmar |
+| **1. ¿Está funcionando?** | Horas de avería por mes antes y después del mes que elijas (por ejemplo, el mes en que empezó un plan), con un veredicto en palabras y las máquinas o equipos que más bajaron y subieron |
+| 2. ¿Dónde se pierden las horas? | Una fila por máquina, con su propio antes y después |
+| 3. ¿Qué equipos atender primero? | Máquina · módulo, ordenados por lo que pierden ahora; cómo fallan y qué se repite |
+| 4. ¿Qué falla? | Familias de falla y los detalles que más se repiten |
 
-Cómo calcula, y por qué cambió respecto a la v4:
+Todo es interactivo: tocar una máquina, un equipo, una familia, un detalle o un
+mes filtra la página entera. Arriba se eligen máquinas, tipo, módulo y meses;
+abajo se pueden ver y descargar las averías una por una.
 
-- **Averías**: une los registros del mismo equipo cuando entre el *fin* de uno y
-  el inicio del siguiente pasan menos de `UNIR_MINUTOS` (15). La v4 medía de
-  inicio a inicio y no unía las paradas partidas en el cambio de turno: una
-  parada de 18 h de PI8 · CS contaba como 4 fallas.
-- **Tendencia**: compara las fallas por mes de la segunda mitad de los meses
-  completos con las de la primera, con la variación real de mes a mes
-  (cuasi-Poisson, 95 %). La v4 usaba Crow-AMSAA, que supone fallas al azar; con
-  rachas como las de estos datos marcaba 37 equipos «empeorando» y 41
-  «mejorando». Ahora son 3 y 13.
-- **Grupos (Jack-Knife)**: límites de Knights (promedios), no medianas, y la
-  duración en minutos.
-- **Se quitaron** Weibull por módulo (daba β < 1, «mortalidad infantil», en
-  el 98 % de los equipos: es efecto de agrupar piezas, no un diagnóstico) y la
-  «disponibilidad» (sin el tiempo programado no se puede calcular).
-- **Textos**: cuenta juntas las variantes de escritura de L3 y L4
-  («Regulacion Electronica», «Regulación electrónica», «Elec - Regulacion
-  Electronica»). Se apaga con `UNIFICAR_TEXTOS = False`.
+El veredicto compara las horas de avería por mes de los dos periodos (solo
+meses completos):
+
+- **Mejoró / Empeoró**: la diferencia es mayor que lo que varían normalmente
+  los meses dentro de cada periodo (razón de tasas cuasi-Poisson, 95 %).
+- **Bajó / Subió**: va en esa dirección, pero todavía puede ser casualidad.
+- **Igual**: cambió menos del 10 % (`CAMBIO_MINIMO`).
+
+Dice si cambió, no por qué: no descuenta cambios de producción ni de forma de
+registrar.
+
+Además, une como una sola avería los registros del mismo equipo cuando entre
+el fin de uno y el inicio del siguiente pasan menos de `UNIR_MINUTOS` (15):
+así una parada partida en el cambio de turno no cuenta como varias. También
+cuenta juntas las variantes de escritura de L3 y L4 (`UNIFICAR_TEXTOS`).
 
 Configuración principal (inicio del script): `ARCHIVO` (si no existe, busca el
-`Analisis_Averias*.xlsx` más reciente), `SALIDA_HTML`, `UNIR_MINUTOS`,
-`FECHA_INICIO`, `FECHA_FIN`, `MIN_FALLAS_TENDENCIA` (15),
-`MIN_MESES_TENDENCIA` (5), `MESES_RECIENTES` (3) y `TOP_ACCIONES` (5).
+`Analisis_Averias*.xlsx` más reciente), `SALIDA_HTML`, `COMPARAR_DESDE`
+(`None` = últimos 3 meses completos; o `"2026-06"`), `MESES_DESPUES`,
+`CAMBIO_MINIMO`, `MIN_AVERIAS_VEREDICTO`, `UNIR_MINUTOS`, `FECHA_INICIO` y
+`FECHA_FIN`.
 
-Con los datos actuales (01/01 al 03/09/2026): 12.730 registros → 8.548 averías,
-3.187 h, 13 h de avería por día. Las 10 combinaciones máquina · módulo que más
-pierden suman solo el 20 % de las horas; la mitad de las horas tiene un detalle
-genérico («Regulación electrónica», «Falla general»); y en PF5 el 62 % de las
-horas tiene el sistema como «Libre».
+Con los datos actuales (01/01 al 03/09/2026), comparando junio–agosto contra
+enero–mayo: la planta pasó de 433 a 338 h de avería por mes (−22 %, mejora
+confirmada). PI7 mejoró (−34 %); PF4, PI9, PI11 y PI8 bajan sin confirmar;
+PF5, PA1 y PF3 suben sin confirmar.
