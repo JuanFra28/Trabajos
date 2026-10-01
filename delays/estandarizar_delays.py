@@ -1,29 +1,28 @@
 """
 ===============================================================================
- ESTANDARIZADOR DE DELAYS  ·  v1
+ ESTANDARIZADOR DE DELAYS  ·  v2
 ===============================================================================
  Convierte el export crudo de delays (PU_Desc, Fecha_Inicio_Real, Turno,
- Reason_Level1..4, Delay, Maquina, Tipo) al formato estándar de la hoja
- Datos_Delays, que es el que usan reporte.py y el libro Planes_Delays_2026.xlsx:
+ Reason_Level1..4, Delay, Maquina, Tipo) al mismo estándar de la hoja "Datos"
+ de Analisis_Averias_Mantenimiento.xlsx, que es la que lee reporte.py:
 
    Maquina | Unidad | Fecha | Mes | Turno | Tipo | Area | Modulo | Cod |
-   Familia | Sistema (L3) | Detalle (L4) | Horas | Minutos
+   Familia | Sistema (L3) | Detalle (L4) | Horas
 
  Qué hace:
    1. Lee el export (xlsx o csv) aunque cambien el nombre o el orden de columnas.
-   2. Quita duplicados exactos y limpia textos (espacios, vacíos -> "(sin dato)").
-   3. Máquina: valida el código (PF3, PI11...) y si falta lo saca de la unidad.
-   4. Horas: usa Delay; si viene vacío lo calcula con Fin - Inicio.
-   5. Tipo: agrupa variantes ("Electrical", "Electronico", "Avería Eléctrica"...)
+   2. Máquina: valida el código (PF3, PI11...) y si falta lo saca de la unidad.
+   3. Horas: usa Delay; si viene vacío lo calcula con Fin - Inicio.
+   4. Tipo: agrupa variantes ("Electrical", "Electronico", "Avería Eléctrica"...)
       en Eléctricas / Mecánicas / ... y se queda solo con averías (configurable).
-   6. Módulo: lo toma del nivel 2 del árbol de razones (Reason_Level2). Si el
-      export no lo trae, lo recupera del histórico ya estandarizado.
-   7. Área (agrupa módulos) y Familia (agrupa sistemas L3): tu histórico manda,
-      y lo que sea nuevo se clasifica con reglas por palabras clave.
-   8. L3/L4: unifica variantes de escritura ("Regulacion electrónica" =
-      "Regulacion Electronica") y quita prefijos "Elec - " / "Mech - ".
-   9. Escribe un Excel cuya primera hoja es Datos_Delays (lista para reporte.py),
-      más hojas de resumen, calidad, pendientes por revisar y unificaciones.
+   5. Módulo: lo toma del nivel 2 del árbol de razones (Reason_Level2). Si el
+      export no lo trae, lo copia de tus archivos de referencia ya clasificados
+      (Analisis_Averias_Mantenimiento*.xlsx, Planes_Delays_2026*.xlsx).
+   6. Área (agrupa módulos) y Familia (agrupa sistemas L3) con tu mismo catálogo.
+   7. Elimina las filas sin dato en Sistema (L3) o Detalle (L4) y los duplicados
+      exactos; quedan listadas en la hoja "Eliminadas".
+   8. Escribe un Excel con la hoja "Datos" (mismo formato y orden que tu
+      archivo) más hojas de control: Calidad, Eliminadas, Pendientes, Resumen.
 
  USO:
    python estandarizar_delays.py                          (usa ENTRADA)
@@ -31,13 +30,14 @@
    python estandarizar_delays.py delays.xlsx salida.xlsx  (y la salida)
 
  Luego:
-   python reporte.py Datos_Delays_estandar.xlsx
+   python reporte.py Analisis_Averias_estandar.xlsx
 
  Requiere: pandas numpy openpyxl
 ===============================================================================
 """
 
 import difflib
+import glob
 import importlib.util
 import os
 import re
@@ -56,32 +56,39 @@ warnings.filterwarnings("ignore")
 # =============================================================================
 # CONFIGURACION   <<<<<<  AJUSTA AQUI
 # =============================================================================
-ENTRADA = "delays.xlsx"                  # export crudo tal como te llega
-HOJA_ENTRADA = None                      # None = primera hoja
-SALIDA = "Datos_Delays_estandar.xlsx"    # primera hoja: Datos_Delays
+ENTRADA = "delays.xlsx"                     # export crudo tal como te llega
+HOJA_ENTRADA = None                         # None = primera hoja
+SALIDA = "Analisis_Averias_estandar.xlsx"   # hoja "Datos", lista para reporte.py
 
-# Histórico ya estandarizado (archivo, hoja). De aquí se recupera el módulo de
-# los eventos que ya estaban clasificados y se aprende tu catálogo
-# (módulo -> área, sistema L3 -> familia). Puede ser tu Planes_Delays_2026.xlsx
-# o una salida anterior de este mismo script. Si no existe, se omite.
-HISTORICO = [
-    ("Planes_Delays_2026.xlsx", "Datos_Delays"),
+# Archivos ya clasificados de donde se copia el módulo de cada evento
+# (archivo, hoja). Se aceptan comodines y se buscan en la carpeta del script,
+# en la carpeta actual y en la del export. Si hay varias versiones, manda la
+# más reciente. Sin ninguno, los eventos quedan con módulo "(sin dato)".
+REFERENCIAS = [
+    ("Analisis_Averias_Mantenimiento*.xlsx", "Datos"),
+    ("Planes_Delays_2026*.xlsx", "Datos_Delays"),
 ]
 
 # --- Filtros
 TIPOS_INCLUIR = ["Eléctricas", "Mecánicas"]  # None = todos los tipos de parada
-FECHA_DESDE = "2026-01-01"   # tu Datos_Delays arranca en 2026. None = todo
+FECHA_DESDE = "2026-01-01"   # tu archivo arranca en 2026. None = todo
 FECHA_HASTA = None           # "2026-08-31" para cortar en un mes cerrado
 
-# --- Limpieza
-QUITAR_DUPLICADOS = True     # filas idénticas en todas las columnas
-QUITAR_PREFIJO_L4 = True     # "Mech - desgaste de faja" -> "Desgaste de faja"
+# --- Filas que se eliminan (quedan listadas en la hoja "Eliminadas")
+ELIMINAR_SIN_L3_L4 = True          # sin dato en Sistema (L3) o en Detalle (L4)
+SIN_INFO_L3_L4 = ["(sin dato)"]    # textos que cuentan como "sin info".
+                                   # Agrega "Libre" para quitar también esas filas
+QUITAR_DUPLICADOS = True           # filas idénticas en todas las columnas
+
+# --- Limpieza opcional de textos. Apagada, L3/L4 y Familia quedan igual que
+#     en tu Analisis_Averias_Mantenimiento.xlsx
+QUITAR_PREFIJO_L4 = False    # "Mech - desgaste de faja" -> "Desgaste de faja"
 PREFIJOS_L4 = ["Elec", "Mech", "Minor", "Menor", "Ex", "CG", "PP", "Man", "TNP"]
-UNIFICAR_VARIANTES = True    # mismas palabras con distinta mayúscula/tilde/espacio
-RECLASIFICAR_OTROS = True    # si tu histórico dejó un sistema en "Otros
+UNIFICAR_VARIANTES = False   # mismas palabras con distinta mayúscula/tilde/espacio
+RECLASIFICAR_OTROS = False   # si tu catálogo dejó un sistema en "Otros
                              # componentes" pero una regla lo reconoce, usa la regla
-COLUMNAS_EXTRA = True        # agrega al final columnas de trazabilidad
-                             # (Fin, Año, Origen módulo, textos originales...)
+COLUMNAS_EXTRA = False       # agrega al final columnas de trazabilidad
+                             # (Minutos, Fin, Origen módulo, textos originales...)
 
 # --- Al terminar, generar el reporte HTML con reporte.py (misma carpeta)
 EJECUTAR_REPORTE = False
@@ -106,11 +113,15 @@ TEXTOS_MANUAL = {
 
 
 # =============================================================================
-# 1. CATALOGOS BASE (aprendidos de Datos_Delays; el histórico los actualiza)
+# 1. CATALOGOS BASE (aprendidos de tu archivo; las referencias los actualizan)
 # =============================================================================
 SIN = "(sin dato)"
+HOJA_SALIDA = "Datos"
 COLUMNAS = ["Maquina", "Unidad", "Fecha", "Mes", "Turno", "Tipo", "Area", "Modulo",
-            "Cod", "Familia", "Sistema (L3)", "Detalle (L4)", "Horas", "Minutos"]
+            "Cod", "Familia", "Sistema (L3)", "Detalle (L4)", "Horas"]
+ANCHOS = {"Maquina": 10, "Unidad": 22, "Fecha": 17, "Mes": 9, "Turno": 7, "Tipo": 11,
+          "Area": 34, "Modulo": 13, "Cod": 9, "Familia": 32, "Sistema (L3)": 30,
+          "Detalle (L4)": 28, "Horas": 9}
 
 MODULOS_BASE = {
     "Adhesivos / Melters": {
@@ -307,7 +318,7 @@ def capitalizar(s):
 
 
 def titulo(s):
-    """'ADHESIVO DE CONSTRUCCION' -> 'Adhesivo De Construccion' (como el histórico)."""
+    """'ADHESIVO DE CONSTRUCCION' -> 'Adhesivo De Construccion' (como tu catálogo)."""
     return re.sub(r"[^\W\d_]+", lambda m: m.group(0)[:1].upper() + m.group(0)[1:].lower(),
                   str(s))
 
@@ -435,7 +446,7 @@ def a_fecha(serie):
 
 
 # =============================================================================
-# 4. HISTORICO Y CATALOGOS
+# 4. REFERENCIAS Y CATALOGOS
 # =============================================================================
 class Catalogo:
     """Módulos (código -> nombre, área) y familias (sistema L3 -> familia)."""
@@ -445,7 +456,7 @@ class Catalogo:
         for area, mods in MODULOS_BASE.items():
             for cod, nom in mods.items():
                 self.mod[cod.upper()] = (nom, area, "base")
-        self.fam = {}          # clave(L3) -> familia (histórico)
+        self.fam = {}          # clave(L3) -> familia (referencias)
         self.eventos = {}      # clave de evento -> COD
         self.eventos2 = {}     # (unidad, fecha, tipo) -> COD si es único
         self.fuentes = []
@@ -490,16 +501,46 @@ def clave_evento(unidad, fecha, l3, l4, tipo):
     return k4, k2
 
 
-def cargar_historico(cat, avisos):
-    for ruta, hoja in HISTORICO:
-        ruta = _ruta(ruta)
-        if not ruta or not os.path.exists(ruta):
-            avisos.append(f"No encontré el histórico '{ruta}'. Se omite.")
-            continue
+def buscar_referencias(entrada, salida):
+    """Rutas (archivo, hoja) de REFERENCIAS que existen, la más reciente primero."""
+    carpetas = []
+    for c in (os.getcwd(), os.path.dirname(os.path.abspath(__file__)),
+              os.path.dirname(os.path.abspath(entrada))):
+        if c not in carpetas:
+            carpetas.append(c)
+    fuera = {os.path.abspath(entrada), os.path.abspath(salida)}
+    vistas, out = set(), []
+    for patron, hoja in REFERENCIAS:
+        rutas = (glob.glob(patron) if os.path.isabs(patron) else
+                 [r for c in carpetas for r in glob.glob(os.path.join(c, patron))])
+        rutas = [os.path.abspath(r) for r in rutas
+                 if not os.path.basename(r).startswith("~$")]      # temporales de Excel
+        for r in sorted(set(rutas), key=os.path.getmtime, reverse=True):
+            if r not in vistas and r not in fuera:
+                vistas.add(r)
+                out.append((r, hoja))
+    return out
+
+
+def leer_referencia(ruta, hoja):
+    """Lee la hoja pedida; si no está, la primera que empiece con 'Datos'."""
+    if ruta.lower().endswith((".csv", ".txt")):
+        return leer_tabla(ruta), "csv"
+    nombres = pd.ExcelFile(ruta).sheet_names
+    if hoja not in nombres:
+        hoja = next((h for h in nombres if clave(h).startswith("datos")), None)
+        if hoja is None:
+            raise ValueError(f"no tiene la hoja de datos (hojas: {', '.join(nombres)})")
+    return leer_tabla(ruta, hoja), hoja
+
+
+def cargar_referencias(cat, rutas, avisos):
+    for ruta, hoja in rutas:
+        nombre = os.path.basename(ruta)
         try:
-            h = leer_tabla(ruta, hoja)
-        except Exception as e:                       # archivo abierto, dañado...
-            avisos.append(f"No pude leer el histórico '{ruta}' ({e}).")
+            h, hoja = leer_referencia(ruta, hoja)
+        except Exception as e:                       # archivo dañado, sin la hoja...
+            avisos.append(f"No pude leer la referencia '{nombre}' ({e}).")
             continue
         c = dict(unidad=_col(h, "unidad"), fecha=_col(h, "fecha"),
                  cod=_col(h, "cod"), modulo=_col(h, "modulo"), area=_col(h, "area"),
@@ -508,7 +549,7 @@ def cargar_historico(cat, avisos):
                  l4=_col(h, "l4original", "detallel4", "detalle", "l4"),
                  l3std=_col(h, "sistemal3"), tipo=_col(h, "tipo"))
         if not (c["cod"] or c["modulo"]):
-            avisos.append(f"El histórico '{ruta}' no tiene columnas Cod/Modulo. Se omite.")
+            avisos.append(f"La referencia '{nombre}' [{hoja}] no tiene columnas Cod/Modulo.")
             continue
         h = h.copy()
         partes = (por_valor(h[c["modulo"]], limpiar).str.split(SEP_MODULO, n=1, regex=True)
@@ -519,16 +560,16 @@ def cargar_historico(cat, avisos):
         h["_nom"] = partes.str[1] if c["modulo"] else None
         h["_area"] = por_valor(h[c["area"]], limpiar) if c["area"] else None
 
-        # módulos: código -> nombre y área más frecuentes
+        # módulos: código -> nombre y área más frecuentes (la primera referencia manda)
         n_mod = 0
         for cod_, g in h.dropna(subset=["_cod"]).groupby("_cod"):
+            ant = cat.mod.get(cod_)
+            if ant and ant[2] in ("manual", "referencia"):
+                continue
             nom = moda(g["_nom"]) if c["modulo"] else None
             area = moda(g["_area"]) if c["area"] else None
-            ant = cat.mod.get(cod_)
-            if ant and ant[2] == "manual":
-                continue
             cat.mod[cod_] = (nom or (ant[0] if ant else cod_),
-                             area or (ant[1] if ant else AREA_OTROS), "histórico")
+                             area or (ant[1] if ant else AREA_OTROS), "referencia")
             n_mod += 1
 
         # familias: sistema L3 -> familia más frecuente
@@ -557,8 +598,12 @@ def cargar_historico(cat, avisos):
                 for k, cod_ in zip(unicos["k2"], unicos["cod"]):
                     cat.eventos2.setdefault(k, cod_)
             n_ev = len(ev)
-        cat.fuentes.append(f"{os.path.basename(ruta)} [{hoja}]: {len(h):,} filas, "
-                           f"{n_mod} módulos, {n_ev:,} eventos con módulo")
+        rango = ""
+        if c["fecha"]:
+            f = pd.to_datetime(h[c["fecha"]], errors="coerce")
+            if f.notna().any():
+                rango = f" del {f.min():%d/%m/%Y} al {f.max():%d/%m/%Y}"
+        cat.fuentes.append(f"{nombre} [{hoja}]: {n_ev:,} eventos con módulo{rango}")
 
 
 # =============================================================================
@@ -589,25 +634,32 @@ def _quitar_prefijo(s):
     return re.sub(pat, "", s, flags=re.I)
 
 
+def texto_original(v):
+    """Texto tal como viene (sin espacios en los extremos) o None si está vacío."""
+    return None if limpiar(v) is None else str(v).strip()
+
+
 def estandarizar_texto(serie, quitar_prefijo=False):
-    """Devuelve la serie estándar y el mapa {original limpio: estándar}."""
+    """Devuelve la serie estándar y el mapa {original: estándar}.
+    Con QUITAR_PREFIJO_L4, UNIFICAR_VARIANTES y TEXTOS_MANUAL apagados el texto
+    queda igual que en el export; solo los vacíos pasan a "(sin dato)"."""
     manual = {clave(k): v for k, v in TEXTOS_MANUAL.items()}
-    cuenta = por_valor(serie, limpiar).value_counts()
-    paso = {}                                    # original limpio -> intermedio
-    peso = Counter()
-    for orig, n in cuenta.items():
+    base = por_valor(serie, texto_original)
+    paso, peso = {}, Counter()                   # original -> intermedio
+    for orig, n in base.value_counts().items():
         t = _quitar_prefijo(orig) if quitar_prefijo else orig
         t = manual.get(clave(orig)) or manual.get(clave(t)) or t
-        paso[orig] = t
-        peso[t] += n
-    mejor = {}
+        paso[orig] = capitalizar(t) if t != orig else t
+        peso[paso[orig]] += n
+    final = dict(paso)
     if UNIFICAR_VARIANTES:                       # la escritura más frecuente gana
+        mejor = {}
         orden = sorted(peso.items(), key=lambda kv: (-kv[1], -sum(ord(ch) > 127
                                                                   for ch in kv[0]), kv[0]))
         for t, _ in orden:
             mejor.setdefault(clave(t), t)
-    final = {o: capitalizar(mejor.get(clave(t), t)) for o, t in paso.items()}
-    salida = por_valor(serie, lambda v: final.get(limpiar(v), SIN) if limpiar(v) else SIN)
+        final = {o: capitalizar(mejor.get(clave(t), t)) for o, t in paso.items()}
+    salida = por_valor(base, lambda v: SIN if es_nulo(v) else final.get(v, v))
     return salida, final
 
 
@@ -687,7 +739,7 @@ def asignar_modulos(d, cat, usar_n2, log):
         rec = k4.map(cat.eventos)
         rec = rec.where(rec.notna(), k2.map(cat.eventos2))
         cod[falta] = rec
-        origen[falta & cod.notna()] = "Histórico"
+        origen[falta & cod.notna()] = "Referencia"
 
     nuevos = {}
     cod_f, mod_f, area_f = [], [], []
@@ -725,7 +777,7 @@ def asignar_familias(d, cat):
             hist = next((cat.fam[k] for k in kk if k in cat.fam), None)
             if hist and not (RECLASIFICAR_OTROS and hist == FAMILIA_OTROS
                              and regla != FAMILIA_OTROS):
-                fam, o = hist, "Histórico"
+                fam, o = hist, "Referencia"
             elif hist:
                 fam, o = regla, f"Regla (antes {FAMILIA_OTROS})"
             else:
@@ -757,18 +809,12 @@ def estandarizar(ruta, cat, avisos):
     r.attrs["cols"] = cols
     log["leidas"] = len(r)
 
-    # --- duplicados exactos
-    log["duplicados"] = 0
-    if QUITAR_DUPLICADOS:
-        dup = r.duplicated()
-        log["duplicados"] = int(dup.sum())
-        r = r[~dup].copy()
-        r.attrs["cols"] = cols
-
     usar_n2, motivo = nivel2_util(r)
     log["usa_n2"], log["motivo_n2"] = usar_n2, motivo
 
     d = pd.DataFrame(index=r.index)
+    d["_dup"] = r.duplicated()           # se quitan al final para no alterar el orden
+    log["duplicados_export"] = int(d["_dup"].sum())
     obs = pd.Series("", index=r.index, dtype=object)
 
     def anotar(mask, texto):
@@ -849,8 +895,8 @@ def estandarizar(ruta, cat, avisos):
     d["Sistema (L3)"], log["map_l3"] = estandarizar_texto(r.get("n3", vacia))
     d["Detalle (L4)"], log["map_l4"] = estandarizar_texto(r.get("n4", vacia),
                                                           quitar_prefijo=QUITAR_PREFIJO_L4)
-    d["L3 original"] = por_valor(r.get("n3", vacia), limpiar).fillna(SIN)
-    d["L4 original"] = por_valor(r.get("n4", vacia), limpiar).fillna(SIN)
+    d["L3 original"] = por_valor(r.get("n3", vacia), texto_original).fillna(SIN)
+    d["L4 original"] = por_valor(r.get("n4", vacia), texto_original).fillna(SIN)
     d["n2"], d["n3"], d["n4"] = r.get("n2", vacia), r.get("n3", vacia), r.get("n4", vacia)
     if usar_n2:
         d["N2 original"] = por_valor(r["n2"], limpiar).fillna(SIN)
@@ -864,6 +910,7 @@ def estandarizar(ruta, cat, avisos):
         incluir = {clave(t) for t in TIPOS_INCLUIR}
         d = d[por_valor(d["Tipo"], clave).isin(incluir)]
     log["tras_tipo"] = len(d)
+    d = d.sort_values("Fecha")        # mismo orden que tu archivo: ordenar y luego cortar
     if FECHA_DESDE:
         d = d[d["Fecha"] >= pd.Timestamp(FECHA_DESDE)]
     if FECHA_HASTA:
@@ -874,12 +921,24 @@ def estandarizar(ruta, cat, avisos):
     # --- módulo, área y familia
     d = asignar_modulos(d, cat, usar_n2, log)
     d = asignar_familias(d, cat)
-
-    # --- columnas finales
-    d["Mes"] = d["Fecha"].dt.month
+    d["Mes"] = d["Fecha"].dt.strftime("%Y-%m")
     d["Año"] = d["Fecha"].dt.year
     d["Minutos"] = d["Horas"] * 60
-    d = d.sort_values(["Fecha", "Maquina", "Unidad"], kind="stable").reset_index(drop=True)
+
+    # --- filas que se eliminan: sin L3 / L4 y duplicados exactos
+    motivo = pd.Series("", index=d.index, dtype=object)
+    if ELIMINAR_SIN_L3_L4:
+        sin_info = {clave(x) for x in SIN_INFO_L3_L4} | {clave(SIN)}
+        s3 = por_valor(d["Sistema (L3)"], clave).isin(sin_info)
+        s4 = por_valor(d["Detalle (L4)"], clave).isin(sin_info)
+        motivo[s3 & s4] = "sin L3 ni L4"
+        motivo[s3 & ~s4] = "sin L3"
+        motivo[~s3 & s4] = "sin L4"
+    if QUITAR_DUPLICADOS:
+        motivo[d["_dup"] & (motivo == "")] = "duplicado exacto"
+    quitar = motivo != ""
+    log["eliminadas"] = d[quitar].assign(Motivo=motivo[quitar]).reset_index(drop=True)
+    d = d[~quitar].reset_index(drop=True)
     return d, log
 
 
@@ -887,12 +946,17 @@ def estandarizar(ruta, cat, avisos):
 # 6. HOJAS DE CONTROL
 # =============================================================================
 def hoja_calidad(d, log, cat, avisos):
+    el = log["eliminadas"]
+
+    def elim(motivo):
+        m = el["Motivo"] == motivo if len(el) else pd.Series(dtype=bool)
+        return int(m.sum()), (f"{el.loc[m, 'Horas'].sum():,.1f} h" if m.any() else "")
+
     filas = [("AVISO", "", a) for a in avisos]
     c = log["columnas"]
     filas += [
         ("Columnas reconocidas", len(c), ", ".join(f"{k}={v}" for k, v in c.items())),
         ("Filas leídas", log["leidas"], ""),
-        ("Duplicados exactos eliminados", log["duplicados"], ""),
         ("Delay venía en", "", log["delay_unidad"]),
         ("Horas calculadas con Fin - Inicio", log["dur_calculada"],
          "Delay vacío en el export"),
@@ -907,25 +971,33 @@ def hoja_calidad(d, log, cat, avisos):
     for t, n in log["por_tipo"].items():
         dentro = not TIPOS_INCLUIR or clave(t) in {clave(x) for x in TIPOS_INCLUIR}
         filas.append(("Tipo: " + str(t), int(n), "se incluye" if dentro else "excluido"))
+    filas.append(("Fuera del rango de fechas", log["fuera_fecha"],
+                  f"desde {FECHA_DESDE or 'inicio'} hasta {FECHA_HASTA or 'fin'}"))
+    for motivo in ("sin L3 ni L4", "sin L3", "sin L4", "duplicado exacto"):
+        n, h = elim(motivo)
+        if not n:
+            continue
+        if motivo == "duplicado exacto":
+            h = f"{h} ({log['duplicados_export']:,} en todo el export)".strip()
+        filas.append((f"Eliminadas: {motivo}", n, f"{h}  (ver hoja Eliminadas)"))
     filas += [
-        ("Fuera del rango de fechas", log["fuera_fecha"],
-         f"desde {FECHA_DESDE or 'inicio'} hasta {FECHA_HASTA or 'fin'}"),
         ("FILAS FINALES", len(d), f"{d['Horas'].sum():,.1f} h"),
         ("Módulo: nivel 2 del export", int((d["Origen módulo"] == "Nivel 2").sum()),
          "" if log["usa_n2"] else log["motivo_n2"]),
-        ("Módulo: recuperado del histórico",
-         int((d["Origen módulo"] == "Histórico").sum()), "; ".join(cat.fuentes)),
+        ("Módulo: copiado de tus referencias",
+         int((d["Origen módulo"] == "Referencia").sum()),
+         "; ".join(cat.fuentes) or "no se encontró ningún archivo de referencia"),
         ("Módulo: sin dato", int((d["Origen módulo"] == "Sin dato").sum()),
-         "ni el export ni el histórico lo traen"),
+         "no está en el export ni en las referencias"),
     ]
     for o, n in d["_origen_familia"].value_counts().items():
         filas.append((f"Familia: {o}", int(n), ""))
     for campo, mapa, col in (("L3", log["map_l3"], "Sistema (L3)"),
                              ("L4", log["map_l4"], "Detalle (L4)")):
         cambiados = sum(1 for o, s in mapa.items() if o != s)
-        filas.append((f"{campo}: textos distintos", d[col].nunique(),
-                      f"{len(mapa)} escrituras originales, {cambiados} corregidas "
-                      f"(ver hoja Unificaciones)"))
+        if cambiados:
+            filas.append((f"{campo}: textos corregidos", cambiados,
+                          f"{d[col].nunique()} textos distintos (ver hoja Unificaciones)"))
     return pd.DataFrame(filas, columns=["Paso", "Cantidad", "Detalle"])
 
 
@@ -939,6 +1011,17 @@ def hoja_pendientes(d, log, cat):
             filas.append((tema, x[por], asignado(x), int(x["Eventos"]),
                           round(float(x["Horas"]), 2), nota))
 
+    sin_mod = d["Origen módulo"] == "Sin dato"
+    if sin_mod.any():
+        d["_maq_mes"] = d["Maquina"] + " · " + d["Mes"]
+        agrega("Eventos sin módulo", sin_mod, "_maq_mes", lambda x: SIN,
+               "el export no trae Reason_Level2 y el evento no está en tus referencias")
+        d.drop(columns=["_maq_mes"], inplace=True)
+    nuevos = log.get("mod_nuevos", {})
+    if nuevos:
+        agrega("Módulo fuera de catálogo", d["Cod"].isin(nuevos.keys()), "Modulo",
+               lambda x: d.loc[d["Modulo"] == x["Modulo"], "Area"].iloc[0],
+               "área por regla: agrégalo a MODULOS_MANUAL con su nombre y área")
     of = d["_origen_familia"]
     fam = d.drop_duplicates("Sistema (L3)").set_index("Sistema (L3)")["Familia"]
     agrega("Familia asignada por regla", of == "Regla", "Sistema (L3)",
@@ -946,19 +1029,7 @@ def hoja_pendientes(d, log, cat):
            "sistema nuevo: confirma la familia o corrígela en FAMILIAS_MANUAL")
     agrega("Familia reclasificada", of.str.startswith("Regla (antes"), "Sistema (L3)",
            lambda x: fam[x["Sistema (L3)"]],
-           f"tu histórico lo tenía en '{FAMILIA_OTROS}'. RECLASIFICAR_OTROS=False lo deja")
-    nuevos = log.get("mod_nuevos", {})
-    if nuevos:
-        agrega("Módulo fuera de catálogo", d["Cod"].isin(nuevos.keys()), "Modulo",
-               lambda x: d.loc[d["Modulo"] == x["Modulo"], "Area"].iloc[0],
-               "área por regla: agrégalo a MODULOS_MANUAL con su nombre y área")
-    sin_mod = d["Origen módulo"] == "Sin dato"
-    if sin_mod.any():
-        d["_mes"] = d["Fecha"].dt.strftime("%Y-%m")
-        d["_maq_mes"] = d["Maquina"] + " · " + d["_mes"]
-        agrega("Eventos sin módulo", sin_mod, "_maq_mes", lambda x: SIN,
-               "el export no trae nivel 2 y el histórico no los tiene")
-        d.drop(columns=["_mes", "_maq_mes"], inplace=True)
+           f"tu catálogo lo tenía en '{FAMILIA_OTROS}'. RECLASIFICAR_OTROS=False lo deja")
     for t, n in log["tipo_sin_regla"].items():
         filas.append(("Tipo sin regla", t, t, int(n), None,
                       "agrega una regla en TIPO_REGLAS"))
@@ -1024,74 +1095,70 @@ def tablas_resumen(d):
 
 
 # =============================================================================
-# 7. SALIDA EXCEL
+# 7. SALIDA EXCEL  (mismo formato que la hoja "Datos" de tu archivo)
 # =============================================================================
-def escribir_excel(d, calidad, pendientes, unif, resumen, ruta):
-    from openpyxl.styles import Alignment, Font, PatternFill
+EXTRA = ["Minutos", "Fin", "Año", "Origen módulo", "N1 original", "N2 original",
+         "L3 original", "L4 original", "Observaciones"]
+FORMATO_FECHA = r"yyyy\-mm\-dd\ hh:mm"
+
+
+def escribir_excel(d, log, calidad, pendientes, unif, resumen, ruta):
+    from openpyxl.styles import Font, PatternFill
     from openpyxl.utils import get_column_letter
 
-    extra = [c for c in ["Fin", "Año", "Origen módulo", "N1 original", "N2 original",
-                         "L3 original", "L4 original", "Observaciones"] if c in d.columns]
-    datos = d[COLUMNAS + (extra if COLUMNAS_EXTRA else [])]
-    cab = PatternFill("solid", fgColor="0B2430")
-    blanca = Font(bold=True, color="FFFFFF")
-    negrita = Font(bold=True, color="0B2430", size=12)
+    extra = [c for c in EXTRA if c in d.columns] if COLUMNAS_EXTRA else []
+    datos = d[COLUMNAS + extra]
+    eliminadas = (log["eliminadas"][COLUMNAS + ["Motivo"]] if len(log["eliminadas"])
+                  else pd.DataFrame(columns=COLUMNAS + ["Motivo"]))
+    cab = PatternFill("solid", fgColor="FF1F3864")          # como tu archivo
+    blanca = Font(bold=True, color="FFFFFFFF")
+    titulo_f = Font(bold=True, color="FF1F3864", size=12)
+    fechas = {"Fecha": FORMATO_FECHA, "Fin": FORMATO_FECHA}
+    otros_anchos = {"Detalle": 90, "Qué hacer": 70, "Motivo": 14}
 
-    def formatear(ws, df, fila_cab=1, anchos=None, filtro=True):
+    def formatear(ws, df, fila_cab=1, filtro=True, fmts=None):
         for j, col in enumerate(df.columns, start=1):
             celda = ws.cell(row=fila_cab, column=j)
             celda.fill, celda.font = cab, blanca
-            celda.alignment = Alignment(vertical="center")
             muestra = [len(str(col))] + [len(str(v)) for v in df[col].head(400)]
-            ancho = (anchos or {}).get(
-                col, min(60, max(9, int(np.percentile(muestra, 95)) + 2)))
+            ancho = (ANCHOS.get(col) or otros_anchos.get(col) or
+                     min(60, max(9, int(np.percentile(muestra, 95)) + 2)))
             ws.column_dimensions[get_column_letter(j)].width = ancho
+            fmt = (fmts or {}).get(col)
+            if fmt:
+                for i in range(fila_cab + 1, fila_cab + 1 + len(df)):
+                    ws.cell(row=i, column=j).number_format = fmt
         if filtro and len(df):
             ws.auto_filter.ref = (f"A{fila_cab}:{get_column_letter(len(df.columns))}"
                                   f"{fila_cab + len(df)}")
-
-    def numeros(ws, df, fmt_por_col, fila_ini=2):
-        for col, fmt in fmt_por_col.items():
-            if col not in df.columns:
-                continue
-            j = df.columns.get_loc(col) + 1
-            for i in range(fila_ini, fila_ini + len(df)):
-                ws.cell(row=i, column=j).number_format = fmt
+            ws.freeze_panes = f"A{fila_cab + 1}"
 
     with pd.ExcelWriter(ruta, engine="openpyxl") as xw:
-        datos.to_excel(xw, sheet_name="Datos_Delays", index=False)
-        ws = xw.sheets["Datos_Delays"]
-        formatear(ws, datos, anchos={"Fecha": 17, "Fin": 17, "Horas": 9, "Minutos": 9,
-                                     "Mes": 6, "Año": 7, "Observaciones": 40})
-        numeros(ws, datos, {"Fecha": "dd/mm/yyyy hh:mm", "Fin": "dd/mm/yyyy hh:mm",
-                            "Horas": "0.000", "Minutos": "0.0"})
-        ws.freeze_panes = "A2"
+        datos.to_excel(xw, sheet_name=HOJA_SALIDA, index=False)
+        formatear(xw.sheets[HOJA_SALIDA], datos,
+                  fmts={**fechas, "Horas": "0.000", "Minutos": "0.0"})
+
+        for nombre, df, fmts in (
+                ("Calidad", calidad, {"Cantidad": "#,##0"}),
+                ("Eliminadas", eliminadas, {**fechas, "Horas": "0.000"}),
+                ("Pendientes", pendientes, {"Horas": "#,##0.00", "Eventos": "#,##0"}),
+                ("Unificaciones", unif, {"Eventos": "#,##0"})):
+            if nombre == "Unificaciones" and unif.empty:
+                continue
+            df.to_excel(xw, sheet_name=nombre, index=False)
+            formatear(xw.sheets[nombre], df, fmts=fmts)
 
         fila = 1
         for titulo_t, t in resumen:
             t.to_excel(xw, sheet_name="Resumen", index=False, startrow=fila)
             ws = xw.sheets["Resumen"]
-            ws.cell(row=fila, column=1, value=titulo_t).font = negrita
-            formatear(ws, t, fila_cab=fila + 1, filtro=False)
-            for j, col in enumerate(t.columns, start=1):
-                fmt = ("0.0%" if str(col).startswith("%") else
-                       "#,##0" if col == "Eventos" else
-                       "#,##0.0" if j > 1 else None)
-                if fmt:
-                    for i in range(fila + 2, fila + 2 + len(t)):
-                        ws.cell(row=i, column=j).number_format = fmt
+            ws.cell(row=fila, column=1, value=titulo_t).font = titulo_f
+            fmts = {col: ("0.0%" if str(col).startswith("%") else
+                          "#,##0" if col == "Eventos" else "#,##0.0")
+                    for col in t.columns[1:]}
+            formatear(ws, t, fila_cab=fila + 1, filtro=False, fmts=fmts)
             fila += len(t) + 4
         ws.column_dimensions["A"].width = 42
-
-        for nombre, df, fmts in (
-                ("Calidad", calidad, {"Cantidad": "#,##0"}),
-                ("Pendientes", pendientes, {"Horas": "#,##0.00", "Eventos": "#,##0"}),
-                ("Unificaciones", unif, {"Eventos": "#,##0"})):
-            df.to_excel(xw, sheet_name=nombre, index=False)
-            ws = xw.sheets[nombre]
-            formatear(ws, df, anchos={"Detalle": 90, "Qué hacer": 70})
-            numeros(ws, df, fmts)
-            ws.freeze_panes = "A2"
 
 
 # =============================================================================
@@ -1101,7 +1168,7 @@ def main():
     entrada = _ruta(sys.argv[1] if len(sys.argv) > 1 else ENTRADA)
     salida = sys.argv[2] if len(sys.argv) > 2 else SALIDA
     print("=" * 70)
-    print("  ESTANDARIZADOR DE DELAYS  ·  v1")
+    print("  ESTANDARIZADOR DE DELAYS  ·  v2")
     print("=" * 70)
     if not os.path.exists(entrada):
         print(f"\n  ERROR: no encuentro el archivo:\n  {entrada}")
@@ -1110,20 +1177,29 @@ def main():
 
     avisos = []
     cat = Catalogo()
-    cargar_historico(cat, avisos)
+    cargar_referencias(cat, buscar_referencias(entrada, salida), avisos)
     cat.aplicar_manuales()
-    print(f"\n  [1/6] Catálogo: {len(cat.mod)} módulos · {len(cat.fam)} sistemas con "
-          f"familia · {len(cat.eventos):,} eventos en el histórico")
-    for f in cat.fuentes:
-        print(f"        {f}")
+    if cat.fuentes:
+        print(f"\n  [1/6] Referencias de módulo ({len(cat.eventos):,} eventos clasificados):")
+        for f in cat.fuentes:
+            print(f"        {f}")
+    else:
+        print("\n  [1/6] Referencias de módulo: NINGUNA")
+        avisos.append("No encontré ningún archivo de referencia con módulos ("
+                      + ", ".join(p for p, _ in REFERENCIAS) + ") junto al script ni "
+                      "junto al export. Copia ahí tu Analisis_Averias_Mantenimiento.xlsx "
+                      "o ajusta REFERENCIAS.")
 
     d, log = estandarizar(entrada, cat, avisos)
-    print(f"  [2/6] {log['leidas']:,} filas leídas · {log['duplicados']:,} duplicadas · "
-          f"{log['dur_calculada']:,} con horas calculadas · "
-          f"{log['maq_rescatada']:,} máquinas rescatadas")
-    print(f"  [3/6] {len(d):,} filas tras filtrar tipo "
-          f"({', '.join(TIPOS_INCLUIR) if TIPOS_INCLUIR else 'todos'}) y fechas "
-          f"({FECHA_DESDE or 'inicio'} a {FECHA_HASTA or 'fin'})")
+    el = log["eliminadas"]
+    print(f"  [2/6] {log['leidas']:,} filas leídas · {log['dur_calculada']:,} con horas "
+          f"calculadas · {log['maq_rescatada']:,} máquinas rescatadas")
+    detalle = (", ".join(f"{n:,} {m}" for m, n in el["Motivo"].value_counts().items())
+               if len(el) else "ninguna")
+    print(f"  [3/6] {len(d) + len(el):,} filas de "
+          f"{', '.join(TIPOS_INCLUIR) if TIPOS_INCLUIR else 'todos los tipos'} "
+          f"({FECHA_DESDE or 'inicio'} a {FECHA_HASTA or 'fin'}) · se eliminan "
+          f"{len(el):,} ({detalle})")
     if d.empty:
         print("\n  No quedó ninguna fila. Revisa TIPOS_INCLUIR, FECHA_DESDE y FECHA_HASTA.")
         print("  Tipos encontrados: " + ", ".join(
@@ -1131,14 +1207,21 @@ def main():
         return
 
     om = d["Origen módulo"].value_counts()
-    if not log["usa_n2"]:
-        avisos.insert(0, f"El módulo no viene en el export: {log['motivo_n2']}. "
-                         f"Pide el export con Reason_Level2. Mientras tanto se recupera "
-                         f"del histórico ({int(om.get('Histórico', 0)):,} eventos) y el "
-                         f"resto queda '{SIN}' ({int(om.get('Sin dato', 0)):,}).")
+    n_sin = int(om.get("Sin dato", 0))
+    if n_sin:
+        h_sin = d.loc[d["Origen módulo"] == "Sin dato", "Horas"].sum()
+        motivo = ("el export trae vacío el nivel 2 en esas filas" if log["usa_n2"]
+                  else log["motivo_n2"])
+        avisos.insert(0, f"{n_sin:,} eventos ({h_sin:,.1f} h) quedaron con módulo "
+                         f"'{SIN}'. Motivo: {motivo}, y esos eventos no están en tus "
+                         f"referencias. Para tenerlos, el export debe traer "
+                         f"Reason_Level2 (ver hoja Pendientes).")
+    elif not log["usa_n2"]:
+        avisos.insert(0, f"El export no trae el módulo ({log['motivo_n2']}); se copió de "
+                         f"tus referencias. Los eventos nuevos que no estén en ellas "
+                         f"saldrán '{SIN}' hasta que el export traiga Reason_Level2.")
     print(f"  [4/6] Módulo: {int(om.get('Nivel 2', 0)):,} del nivel 2 · "
-          f"{int(om.get('Histórico', 0)):,} del histórico · "
-          f"{int(om.get('Sin dato', 0)):,} sin dato")
+          f"{int(om.get('Referencia', 0)):,} de las referencias · {n_sin:,} sin dato")
 
     calidad = hoja_calidad(d, log, cat, avisos)
     pendientes = hoja_pendientes(d, log, cat)
@@ -1149,19 +1232,18 @@ def main():
           f"{len(pendientes)} pendientes por revisar")
 
     try:
-        escribir_excel(d, calidad, pendientes, unif, resumen, salida)
+        escribir_excel(d, log, calidad, pendientes, unif, resumen, salida)
     except PermissionError:
         base, ext = os.path.splitext(salida)
         salida = f"{base}_{datetime.now():%Y%m%d_%H%M%S}{ext}"
         print("        El archivo de salida está abierto; escribo una copia nueva.")
-        escribir_excel(d, calidad, pendientes, unif, resumen, salida)
+        escribir_excel(d, log, calidad, pendientes, unif, resumen, salida)
     print(f"  [6/6] {salida} ({os.path.getsize(salida) / 1024:,.0f} KB)")
 
     print("\n" + "=" * 70)
     print(f"  {len(d):,} {'averías' if TIPOS_INCLUIR else 'paradas'} · "
-          f"{d['Horas'].sum():,.0f} h · "
-          f"{d['Maquina'].nunique()} máquinas · {d.loc[d['Cod'] != SIN, 'Cod'].nunique()} "
-          f"módulos")
+          f"{d['Horas'].sum():,.0f} h · {d['Maquina'].nunique()} máquinas · "
+          f"{d.loc[d['Cod'] != SIN, 'Cod'].nunique()} módulos")
     for a in avisos:
         print(f"  AVISO: {a}")
     print("=" * 70)
