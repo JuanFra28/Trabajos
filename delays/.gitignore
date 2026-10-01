@@ -1,0 +1,7 @@
+# datos de planta y salidas generadas: no se versionan
+*.xlsx
+*.xls
+*.csv
+*.html
+~$*
+__pycache__/
